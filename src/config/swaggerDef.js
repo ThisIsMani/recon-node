@@ -27,7 +27,130 @@ const options = {
     // },
     // security: [{ // Global security definition (if any)
     //   bearerAuth: []
-    // }]
+    // }],
+    components: {
+      schemas: {
+        AccountInput: {
+          type: 'object',
+          required: [
+            'account_name',
+            'account_type',
+            'currency'
+          ],
+          properties: {
+            account_name: {
+              type: 'string',
+              description: 'Name of the account.',
+              example: 'Main Operating Account'
+            },
+            account_type: {
+              $ref: '#/components/schemas/AccountTypeEnum'
+            },
+            currency: {
+              type: 'string',
+              description: '3-letter currency code (ISO 4217).',
+              example: 'USD'
+            }
+          }
+        },
+        AccountResponse: {
+          type: 'object',
+          properties: {
+            account_id: {
+              type: 'string',
+              format: 'uuid',
+              description: 'Unique identifier for the account.',
+              example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
+            },
+            merchant_id: {
+              type: 'string',
+              description: 'Identifier of the merchant this account belongs to.',
+              example: 'merchant_123'
+            },
+            account_name: {
+              type: 'string',
+              description: 'Name of the account.',
+              example: 'Main Operating Account'
+            },
+            account_type: {
+              $ref: '#/components/schemas/AccountTypeEnum'
+            },
+            currency: {
+              type: 'string',
+              description: '3-letter currency code.',
+              example: 'USD'
+            }
+            // created_at and updated_at are in the database model but intentionally excluded from this API schema
+          }
+        },
+        AccountWithBalanceResponse: {
+          allOf: [
+            { $ref: '#/components/schemas/AccountResponse' },
+            {
+              type: 'object',
+              properties: {
+                posted_balance: {
+                  type: 'string',
+                  description: 'Placeholder for posted balance.',
+                  example: '0.00'
+                },
+                pending_balance: {
+                  type: 'string',
+                  description: 'Placeholder for pending balance.',
+                  example: '0.00'
+                },
+                available_balance: {
+                  type: 'string',
+                  description: 'Placeholder for available balance.',
+                  example: '0.00'
+                }
+              }
+            }
+          ]
+        },
+        AccountTypeEnum: {
+          type: 'string',
+          enum: ['DEBIT_NORMAL', 'CREDIT_NORMAL'],
+          description: 'Type of the account. DEBIT_NORMAL for assets/expenses, CREDIT_NORMAL for liabilities/revenue/equity.',
+          example: 'DEBIT_NORMAL'
+        },
+        // Keep existing schemas if any, or add MerchantAccount and ErrorResponse if they were intended to be here
+        // For now, assuming they are defined via JSDoc in their respective route files or should be added if not.
+        // If MerchantAccount and ErrorResponse schemas are needed globally, they should be defined here too.
+        // Example for MerchantAccount (if it's not picked up from JSDoc elsewhere):
+        /*
+        MerchantAccount: {
+          type: 'object',
+          properties: {
+            merchant_id: { type: 'string', example: 'merchant_xyz' },
+            merchant_name: { type: 'string', example: 'Test Merchant LLC' }
+          }
+        },
+        */
+        ErrorResponse: {
+          type: 'object',
+          properties: {
+            error: {
+              type: 'string',
+              example: 'An error occurred.'
+            }
+          }
+        },
+         HealthResponse: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              example: 'Server is healthy and database is connected.'
+            },
+            database: {
+              type: 'string',
+              example: 'Connected'
+            }
+          }
+        }
+      }
+    }
   },
   // Path to the API docs (your route files)
   // We'll target all .js files within the routes directory and its subdirectories

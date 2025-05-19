@@ -1,6 +1,7 @@
 const express = require('express');
 const healthRoutes = require('./health');
 const merchantRoutes = require('./merchant'); // Import merchant routes
+const accountRoutes = require('./account'); // Import account routes
 
 const router = express.Router();
 
@@ -9,6 +10,9 @@ router.use('/health', healthRoutes);
 
 // Mount merchant routes
 router.use('/merchants', merchantRoutes);
+
+// Mount account routes (nested under merchants)
+router.use('/merchants/:merchant_id/accounts', accountRoutes);
 
 // Mount other resource routes here in the future
 // e.g., const ledgerRoutes = require('./ledger');

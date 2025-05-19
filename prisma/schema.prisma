@@ -10,11 +10,29 @@ generator client {
 model MerchantAccount {
   merchant_id   String @id @db.VarChar(255)
   merchant_name String @db.VarChar(255)
+  accounts      Account[] // Relation to multiple accounts
   // Future: Add relations to other models like 'Account' for the Smart Ledger
-  // accounts Account[]
 }
 
 // Future: Define other models for the Smart Ledger here
-// model Account { ... }
 // model Entry { ... }
 // model Transaction { ... }
+
+model Account {
+  account_id    String      @id @default(uuid())
+  merchant_id   String      @db.VarChar(255)
+  account_name  String      @db.VarChar(255)
+  account_type  AccountType
+  currency      String      @db.VarChar(3) // E.g., "USD", "EUR"
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
+
+  merchant      MerchantAccount @relation(fields: [merchant_id], references: [merchant_id])
+
+  @@index([merchant_id])
+}
+
+enum AccountType {
+  DEBIT_NORMAL  // Balances increase with debits, decrease with credits (e.g., Asset, Expense)
+  CREDIT_NORMAL // Balances increase with credits, decrease with debits (e.g., Liability, Revenue, Equity)
+}

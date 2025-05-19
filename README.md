@@ -61,6 +61,16 @@ This is a Node.js backend service for a Smart Ledger application, using Express.
 
 ## Running the Application
 
+### Running Tests
+
+To run the automated API tests:
+```bash
+npm test
+```
+This will execute Jest tests defined in the `tests/` directory. Ensure your test database (`recon_node_test`) is accessible and the `DATABASE_URL` in `.env.test` is correctly configured. The tests will automatically reset and migrate the test database before running.
+
+### Starting the Server
+
 -   **Start the server:**
     ```bash
     npm start
@@ -136,9 +146,33 @@ See `/api-docs` for interactive documentation.
     -   **Success Response (201 Created):** The created merchant object.
     -   **Error Responses:** 400 (Bad Request), 409 (Conflict if `merchant_id` exists).
 
--   **GET** `/api/merchants`
+    -   **GET** `/api/merchants`
     -   Retrieves a list of all merchant accounts.
     -   **Success Response (200 OK):** An array of merchant objects.
+
+### Account Management (under a specific Merchant)
+
+-   **POST** `/api/merchants/:merchant_id/accounts`
+    -   Creates a new account for the specified merchant.
+    -   **Request Body:**
+        ```json
+        {
+          "account_name": "string",
+          "account_type": "DEBIT_NORMAL | CREDIT_NORMAL",
+          "currency": "string (3-letter code, e.g., USD)"
+        }
+        ```
+    -   **Success Response (201 Created):** The created account object (excluding `created_at`, `updated_at`).
+    -   **Error Responses:** 400 (Bad Request, e.g., missing fields, merchant not found), 500 (Server Error).
+
+-   **GET** `/api/merchants/:merchant_id/accounts`
+    -   Retrieves a list of all accounts for the specified merchant.
+    -   **Success Response (200 OK):** An array of account objects (excluding `created_at`, `updated_at`, and including placeholder balances).
+
+-   **DELETE** `/api/merchants/:merchant_id/accounts/:account_id`
+    -   Deletes a specific account for the specified merchant.
+    -   **Success Response (200 OK):** The deleted account object (excluding `created_at`, `updated_at`).
+    -   **Error Responses:** 404 (Not Found, if account or merchant is not found, or account does not belong to merchant), 500 (Server Error).
 
 ## Next Steps (Development)
 

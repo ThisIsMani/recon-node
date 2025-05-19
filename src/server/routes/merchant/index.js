@@ -1,8 +1,6 @@
 const express = require('express');
-const path = require('path'); // Import path module
-// Construct an absolute path to the core merchant module
-const merchantCorePath = path.resolve(__dirname, '..', '..', 'core', 'merchant', 'index.js');
-const merchantCore = require(merchantCorePath);
+// Use a simpler relative path for merchantCore
+const merchantCore = require('../../core/merchant'); // Assumes index.js is picked up automatically
 
 const router = express.Router();
 
