@@ -1,0 +1,20 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model MerchantAccount {
+  merchant_id   String @id @db.VarChar(255)
+  merchant_name String @db.VarChar(255)
+  // Future: Add relations to other models like 'Account' for the Smart Ledger
+  // accounts Account[]
+}
+
+// Future: Define other models for the Smart Ledger here
+// model Account { ... }
+// model Entry { ... }
+// model Transaction { ... }
