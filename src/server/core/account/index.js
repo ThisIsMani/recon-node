@@ -38,7 +38,9 @@ async function createAccount(merchantId, accountData) {
     });
     return newAccount;
   } catch (error) {
-    console.error('Error creating account:', error);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error('Error creating account:', error);
+    }
     if (error.message.startsWith('Merchant with ID')) { // If our custom merchant not found error
         throw error;
     }
@@ -79,7 +81,9 @@ async function listAccountsByMerchant(merchantId) {
         available_balance: '0.00' 
     }));
   } catch (error) {
-    console.error('Error listing accounts:', error);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error('Error listing accounts:', error);
+    }
     throw new Error('Could not list accounts.');
   }
 }
@@ -119,7 +123,9 @@ async function deleteAccount(merchantId, accountId) {
     });
     return deletedAccount;
   } catch (error) {
-    console.error('Error deleting account:', error);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error('Error deleting account:', error);
+    }
     if (error.message.startsWith('Account with ID')) throw error; // Re-throw custom errors
     // Handle Prisma's specific error for record not found during delete
     if (error.code === 'P2025') {

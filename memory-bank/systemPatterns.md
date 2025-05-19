@@ -2,7 +2,7 @@
 
 **Architecture:**
 - **Web Server:** Node.js with Express.js framework.
-- **API Endpoints:** RESTful API endpoints for interacting with the ledger (e.g., `/api/health`, future: `/api/sales`, `/api/settlements`).
+- **API Endpoints:** RESTful API endpoints for interacting with the ledger (e.g., `/api/health`, and entity-specific endpoints like `/api/merchants`, `/api/accounts`).
 - **Database:** PostgreSQL.
 - **ORM/Migration Tool:** Prisma for schema management, migrations, and database access (via Prisma Client).
 - **Modularity:** The application is structured into:
@@ -12,19 +12,20 @@
     - `services`: Shared services, primarily `prisma.js` (exporting Prisma Client instance).
     - `db_models`: (Potentially less used if Prisma schema is the primary source of truth, but could hold complex raw queries or view definitions).
     - `api_models`: Intended for request/response data structure definitions or validation schemas.
-    - `server/routes`: Defines API routes and maps them to handlers.
-    - `server/core`: Contains the core business logic (services) for each feature.
+    - `server/routes`: Defines API routes and maps them to handlers. Organized by entity (e.g., `server/routes/merchant/`, `server/routes/account/`).
+    - `server/core`: Contains the core business logic (services) for each feature. Organized by entity (e.g., `server/core/merchant/`, `server/core/account/`).
     - `utils`: Common utility functions.
 
-**Data Flow (Example: Recording a Sale):**
-1.  HTTP request hits an API endpoint (e.g., `POST /api/sales`).
-2.  The route handler in `src/server/routes/sales.js` (to be created) receives the request.
-3.  The handler calls a service function in `src/server/core/sales.js` (to be created), passing validated request data.
-4.  The core service function implements the Smart Ledger logic:
-    - Interacts with Prisma Client (from `src/services/prisma.js`) to perform database operations (e.g., `prisma.entry.create()`).
-    - Creates "expected" entries based on defined rules.
+**General Data Flow (Example for a typical entity):**
+1.  HTTP request hits an API endpoint (e.g., `POST /api/<entity-name>`).
+2.  The route handler in `src/server/routes/<entity-name>/index.js` receives the request.
+3.  The handler calls a service function in `src/server/core/<entity-name>/index.js`, passing validated request data.
+4.  The core service function implements the business logic:
+    - Interacts with Prisma Client (from `src/services/prisma.js`) to perform database operations (e.g., `prisma.<entityModel>.create()`).
+    - May involve related entities or specific business rules.
 5.  The core service function returns a result to the route handler.
 6.  The route handler sends an HTTP JSON response.
+    *Specific data flow examples for entities like "Sales" or "Transactions" will be detailed in their respective `memory-bank/entities/` documents as they are developed.*
 
 **Key Design Patterns:**
 - **Service Layer:** Business logic is encapsulated in `core` modules, separating it from route handling.

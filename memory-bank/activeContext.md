@@ -1,33 +1,29 @@
-# Active Context: Smart Ledger Backend (Node.js) (as of 2025-05-19)
+# Active Context: Smart Ledger Backend (Node.js) (Staging Entry API Nested & Refined)
 
 **Current Focus:**
-- Completion of API Testing Setup and initial test suites for Merchants and Accounts.
-- Planning for next phase: Entries and Transactions.
+- Refinement of the Staging Entry API to be nested under accounts and removal of update endpoint.
 
-**Key Decisions & Outcomes (API Testing Setup):**
-- Testing Framework: Jest with Supertest for API endpoint testing.
-- Test Directory: `tests/` with subdirectories `merchants/` and `accounts/`. Test files: `merchants.js`, `accounts.js`.
-- Test Database: Dedicated `recon_node_test` database.
-- Environment Config: `.env.test` for test `DATABASE_URL`, loaded via `dotenv` in `jest.setup.js`.
-- Database Reset: `npx prisma migrate reset --force --skip-seed` executed via `jest.globalSetup.js` before test runs.
-- `package.json`: `test` script configured as `cross-env NODE_ENV=test jest --detectOpenHandles`.
-- Jest Configuration: `jest.config.js` created to manage test environment, setup files, test matching patterns, and coverage.
-- Initial test suites for Merchant and Account APIs implemented and passing.
-- `README.md` updated with testing instructions.
-- Plan file `./memory-bank/plans/2025-05-19-api-tests.md` was followed.
+**Key Decisions & Outcomes (Staging Entry API Refinement):**
+- **Database:** Schema remains the same for `StagingEntry` model.
+- **API Endpoints:**
+  - Changed to `POST /api/accounts/:account_id/staging-entries` for creating entries. `account_id` is now a path parameter.
+  - Changed to `GET /api/accounts/:account_id/staging-entries` for listing entries.
+  - The `PUT /api/staging-entries/:staging_entry_id/status` endpoint was REMOVED.
+- **Core Logic:**
+  - `createStagingEntry` in `src/server/core/staging-entry/index.js` now accepts `account_id` as a direct parameter.
+  - `listStagingEntries` in `src/server/core/staging-entry/index.js` now accepts `account_id` as a direct parameter and filters by it.
+  - `updateStagingEntryStatus` function was REMOVED.
+- **Routing:** Main router and staging entry router updated for new nested paths. `mergeParams: true` enabled on staging entry router.
+- **Documentation:**
+  - Swagger API documentation (JSDoc in routes) updated for new paths and parameters.
+  - Memory Bank entity file `memory-bank/entities/staging-entries.md` updated.
+- **Testing:** Tests in `tests/staging-entry/staging-entry.js` updated for new paths and removal of PUT endpoint tests. All tests are passing.
 
-**Next Steps (High-Level):**
-1.  Update `memory-bank/progress.md` to log the completion of the API testing setup.
-2.  Discuss and plan the database schema and APIs for "Entries" and "Transactions".
-    *   Define `Entry` model (linking to `Account`, amount, type (debit/credit), transaction_id, etc.).
-    *   Define `Transaction` model (grouping entries, date, description, status, etc.).
-3.  Implement API endpoints for creating and managing entries and transactions.
-4.  Implement logic for on-the-fly balance calculations based on entries.
-5.  Write API tests for new Entry and Transaction endpoints.
-6.  Address TODOs from previous phases: more robust input validation (e.g., using Joi/Zod), balance check on account deletion.
-
-**Open Questions/Considerations for Next Phase:**
-- How should double-entry accounting principles be enforced at the API/core logic level for transactions?
-- What are the specific states for a Transaction (e.g., pending, posted, voided)?
-- How will idempotency be handled for creating entries/transactions?
-- Detailed requirements for balance calculation (e.g., distinguishing between posted and pending entries).
+**Next Steps (High-Level, post this task):**
+1.  Update `memory-bank/progress.md` to log the completion of the Staging Entry API (nested POST/GET, no update API).
+2.  Discuss and plan the database schema and APIs for final "Entries" and "Transactions" (which will represent the actual ledger movements).
+3.  Implement API endpoints for creating and managing these final entries and transactions (potentially including a way to update StagingEntry status as part of processing into a final Entry, if not directly via API).
+4.  Implement logic for on-the-fly balance calculations on `Account` based on final `Entry` records.
+5.  Write API tests for new final Entry and Transaction endpoints.
+6.  Address TODOs from previous phases (e.g., more robust input validation across all APIs, balance check on account deletion).
+7.  Begin design/implementation of the "recon engine" that utilizes `ReconRule`s to create "expected entries" (which might be a type of `StagingEntry` initially or directly a final `Entry`).

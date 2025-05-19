@@ -11,9 +11,5 @@
 - The system must maintain data integrity and accuracy for financial records.
 - The `/api/health` endpoint provides a basic status check of the service and its database connection.
 
-**Core User Stories (Illustrative, to be expanded):**
-- As a finance user, I want to record a new sale so that revenue is recognized and expected funds from the PSP are tracked.
-- As a finance user, I want to submit a PSP settlement report so that collected funds are confirmed, payouts are recorded, and expected bank deposits are tracked.
-- As a finance user, I want to submit bank statement data so that actual bank deposits are confirmed and reconciled against expectations.
-- As a finance user, I want to view the current status and balance of any account (e.g., Sales Revenue, PSP Holding, Bank Account) to understand fund positions.
-- As a finance user, I want to see a list of outstanding expectations (e.g., funds expected from PSP, deposits expected in bank) to identify potential issues or delays.
+**Core User Stories (General):**
+This section will be expanded with more specific user stories in entity-specific documents (e.g., `entities/accounts.md`, `entities/merchants.md`) or as new entities (e.g., Sales, Transactions, Expectations) are developed. The overall goal is to provide a comprehensive view of financial operations.

@@ -18,6 +18,51 @@ model MerchantAccount {
 // model Entry { ... }
 // model Transaction { ... }
 
+model ReconRule {
+  id               String   @id @default(cuid())
+  account_one_id   String
+  account_two_id   String
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  accountOne       Account  @relation("ReconRuleAccountOne", fields: [account_one_id], references: [account_id])
+  accountTwo       Account  @relation("ReconRuleAccountTwo", fields: [account_two_id], references: [account_id])
+
+  @@unique([account_one_id, account_two_id], name: "unique_recon_rule_pair")
+  @@index([account_one_id])
+  @@index([account_two_id])
+}
+
+enum StagingEntryStatus {
+  NEEDS_MANUAL_REVIEW
+  PROCESSED
+}
+
+model StagingEntry {
+  staging_entry_id String               @id @default(cuid())
+  account_id         String
+  entry_type         EntryType
+  amount             Decimal
+  currency           String
+  status             StagingEntryStatus   @default(NEEDS_MANUAL_REVIEW)
+  effective_date     DateTime
+  metadata           Json?                @db.JsonB
+  discarded_at       DateTime?
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @updatedAt
+
+  account            Account              @relation(fields: [account_id], references: [account_id])
+
+  @@index([account_id])
+  @@index([status])
+  @@index([effective_date])
+}
+
+enum EntryType {
+  DEBIT
+  CREDIT
+}
+
 model Account {
   account_id    String      @id @default(uuid())
   merchant_id   String      @db.VarChar(255)
@@ -28,6 +73,9 @@ model Account {
   updated_at    DateTime    @updatedAt
 
   merchant      MerchantAccount @relation(fields: [merchant_id], references: [merchant_id])
+  reconRulesAsOne ReconRule[] @relation("ReconRuleAccountOne")
+  reconRulesAsTwo ReconRule[] @relation("ReconRuleAccountTwo")
+  stagingEntries  StagingEntry[]
 
   @@index([merchant_id])
 }

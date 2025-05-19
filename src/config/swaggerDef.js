@@ -136,6 +136,81 @@ const options = {
             }
           }
         },
+        ReconRule: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'clxmgmefg000208l3h4j5k6l7' },
+            account_one_id: { type: 'string', example: 'clxmgm62n000008l3g1k0h2j7' },
+            account_two_id: { type: 'string', example: 'clxmgmabc000108l3b2c1d4e5' },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
+        ReconRuleWithAccounts: {
+          allOf: [
+            { $ref: '#/components/schemas/ReconRule' },
+            {
+              type: 'object',
+              properties: {
+                accountOne: {
+                  type: 'object',
+                  properties: {
+                    account_id: { type: 'string' },
+                    account_name: { type: 'string' },
+                    merchant_id: { type: 'string' }
+                  }
+                },
+                accountTwo: {
+                  type: 'object',
+                  properties: {
+                    account_id: { type: 'string' },
+                    account_name: { type: 'string' },
+                    merchant_id: { type: 'string' }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        StagingEntryStatusEnum: {
+          type: 'string',
+          enum: ['NEEDS_MANUAL_REVIEW', 'PROCESSED'],
+          description: 'Status of a staging entry.'
+        },
+        EntryTypeEnum: {
+          type: 'string',
+          enum: ['DEBIT', 'CREDIT'],
+          description: 'Type of financial entry.'
+        },
+        StagingEntryInput: {
+          type: 'object',
+          required: ['account_id', 'entry_type', 'amount', 'currency', 'effective_date'],
+          properties: {
+            account_id: { type: 'string', description: 'Associated account ID.' },
+            entry_type: { $ref: '#/components/schemas/EntryTypeEnum' },
+            amount: { type: 'number', format: 'decimal', description: 'Monetary amount.' },
+            currency: { type: 'string', description: '3-letter currency code.' },
+            effective_date: { type: 'string', format: 'date-time', description: 'Effective date of the entry.' },
+            metadata: { type: 'object', nullable: true, description: 'Optional JSON metadata.' },
+            discarded_at: { type: 'string', format: 'date-time', nullable: true, description: 'Timestamp if entry is discarded.' }
+          }
+        },
+        StagingEntry: {
+          type: 'object',
+          properties: {
+            staging_entry_id: { type: 'string', description: 'Unique ID of the staging entry.' },
+            account_id: { type: 'string' },
+            entry_type: { $ref: '#/components/schemas/EntryTypeEnum' },
+            amount: { type: 'number', format: 'decimal' },
+            currency: { type: 'string' },
+            status: { $ref: '#/components/schemas/StagingEntryStatusEnum' },
+            effective_date: { type: 'string', format: 'date-time' },
+            metadata: { type: 'object', nullable: true },
+            discarded_at: { type: 'string', format: 'date-time', nullable: true },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
          HealthResponse: {
           type: 'object',
           properties: {

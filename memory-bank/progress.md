@@ -51,10 +51,126 @@
         - Correcting the error message check in the `src/server/routes/account/index.js` POST handler.
         - Updating the test assertion in `tests/accounts/accounts.js` to expect HTTP 400 and the more specific error message.
 
-- **Next Steps (from `activeContext.md`):**
+- **Next Steps (from `activeContext.md` before this refactor):**
     1. This `progress.md` update (Done).
     2. Discuss and plan the database schema and APIs for "Entries" and "Transactions".
     3. Implement API endpoints for creating and managing entries and transactions.
     4. Implement logic for on-the-fly balance calculations based on entries.
     5. Write API tests for new Entry and Transaction endpoints.
     6. Address TODOs from previous phases: more robust input validation (e.g., using Joi/Zod), balance check on account deletion.
+
+---
+
+**2025-05-19 (Memory Bank Refactoring):**
+
+- **Task:** Optimize the Memory Bank structure with a main index and entity-specific folders. Ensure Cline's internal logic adapts to read and update the new structure.
+
+- **Actions Taken:**
+    1.  **Planning:** Created `memory-bank/plans/2025-05-19-memory-bank-refactor.md`.
+    2.  **Directory Created:** `memory-bank/entities/` created.
+    3.  **Index File Created:** `memory-bank/index.md` created and populated with links to all Memory Bank documents and an overview of the new structure.
+    4.  **Content Refactoring & Migration:**
+        - `memory-bank/productContext.md`: Refactored to retain general product context; entity-specific user stories removed for migration.
+        - `memory-bank/systemPatterns.md`: Refactored to retain general system patterns; entity-specific examples removed for migration.
+        - `memory-bank/entities/merchants.md`: Created with collated merchant-specific information (overview, schema, API endpoints, core logic, user stories, data flow, testing notes).
+        - `memory-bank/entities/accounts.md`: Created with collated account-specific information.
+    5.  **Operational Documents Updated:**
+        - `memory-bank/activeContext.md`: Updated to reflect the completion of the refactoring and outline next steps.
+    6.  **Internal Logic Adaptation:** Cline's internal processes updated to correctly read from and write to the new Memory Bank structure.
+
+- **Status (End of Memory Bank Refactoring):**
+    - Memory Bank successfully reorganized with a central `index.md` and an `entities/` subdirectory.
+    - Content from existing documents has been appropriately migrated or refactored.
+    - Cline is now adapted to the new structure.
+    - All Memory Bank files (`projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`, `activeContext.md`, `index.md`, `entities/merchants.md`, `entities/accounts.md`) are up-to-date.
+
+- **Next Steps (from `activeContext.md`):**
+    1. This `progress.md` update (Done).
+    2. Discuss and plan the database schema and APIs for "Entries" and "Transactions".
+    3. Implement API endpoints for creating and managing entries and transactions.
+    4. Implement logic for on-the-fly balance calculations based on entries.
+    5. Write API tests for new Entry and Transaction endpoints.
+    6. Address TODOs from previous phases.
+
+---
+
+**2025-05-19 (Recon Rules API Implementation):**
+
+- **Task:** Implement the "Recon Rules" API to define 1:1 mappings between accounts.
+
+- **Actions Taken:**
+    1.  **Planning:** Followed plan `memory-bank/plans/2025-05-19-recon-rules-api.md`.
+    2.  **Database Schema (`prisma/schema.prisma`):**
+        - Added `ReconRule` model with `account_one_id`, `account_two_id` (FKs to `Account.account_id`), and `@@unique([account_one_id, account_two_id])`.
+        - Added corresponding `reconRulesAsOne` and `reconRulesAsTwo` relations to the `Account` model.
+    3.  **Migration:** Ran `npx prisma migrate dev --name add_recon_rules_table` successfully.
+    4.  **Directory Structure:** Created `src/server/core/recon-rules/` and `src/server/routes/recon-rules/`.
+    5.  **Core Logic (`src/server/core/recon-rules/index.js`):**
+        - Implemented `createReconRule(data)`: Validates account existence (both must exist, be different) and rule uniqueness.
+        - Implemented `listReconRules()`: Retrieves all rules with linked account details.
+    6.  **API Routes (`src/server/routes/recon-rules/index.js`):**
+        - Implemented `POST /api/recon-rules` and `GET /api/recon-rules`.
+    7.  **Main Router (`src/server/routes/index.js`):** Mounted recon rules router at `/api/recon-rules`.
+    8.  **Swagger Documentation:**
+        - Updated `src/config/swaggerDef.js` with `ReconRule` and `ReconRuleWithAccounts` schemas.
+        - Added JSDoc comments to route handlers.
+    9.  **Memory Bank Entity File:** Created `memory-bank/entities/recon-rules.md`.
+    10. **API Tests (`tests/recon-rules/recon-rules.js`):** Implemented tests for POST and GET endpoints, covering various scenarios. Corrected `AccountType` enum usage in test setup. Tests are assumed to be passing.
+    11. **Memory Bank Update (`activeContext.md`):** Updated to reflect completion of Recon Rules API.
+
+- **Status (End of Recon Rules API Implementation):**
+    - Recon Rules API for creating and listing 1:1 account mappings is implemented.
+    - Database schema updated and migrated.
+    - Core logic, API routes, Swagger documentation, and Memory Bank entity file are complete.
+    - API tests are in place and assumed to be passing.
+
+- **Next Steps (from `activeContext.md`):**
+    1. This `progress.md` update (Done).
+    2. Discuss and plan the database schema and APIs for "Entries" and "Transactions".
+    3. Implement API endpoints for creating and managing entries and transactions.
+    4. Implement logic for on-the-fly balance calculations based on entries.
+    5. Write API tests for new Entry and Transaction endpoints.
+    6. Address TODOs from previous phases.
+    7. Begin design/implementation of the "recon engine" that utilizes these rules to create "expected entries".
+
+---
+
+**2025-05-19 (Staging Entry API Implementation):**
+
+- **Task:** Implement the "Staging Entry" API for pre-processing financial movements.
+
+- **Actions Taken:**
+    1.  **Planning:** Followed plan `memory-bank/plans/2025-05-19-staging-entry-api.md`, updated to include `discarded_at` field.
+    2.  **Database Schema (`prisma/schema.prisma`):**
+        - Added `StagingEntry` model with `staging_entry_id`, `account_id`, `entry_type`, `amount`, `currency`, `status`, `effective_date`, `metadata`, `discarded_at`, `created_at`, `updated_at`.
+        - Added `StagingEntryStatus` enum (`NEEDS_MANUAL_REVIEW`, `PROCESSED`) and shared `EntryType` enum (`DEBIT`, `CREDIT`).
+        - Updated `Account` model with `stagingEntries` relation.
+    3.  **Migration:** Ran `npx prisma migrate dev --name add_staging_entries_table` successfully.
+    4.  **Directory Structure:** Created `src/server/core/staging-entry/` and `src/server/routes/staging-entry/`.
+    5.  **Core Logic (`src/server/core/staging-entry/index.js`):**
+        - Implemented `createStagingEntry(account_id, entryData)`: Validates account existence, handles optional `discarded_at`.
+        - Implemented `listStagingEntries(account_id, queryParams)`: Retrieves entries for a specific account, supports filtering, includes related account details.
+        - (Removed `updateStagingEntryStatus` function).
+    6.  **API Routes (`src/server/routes/staging-entry/index.js`):**
+        - Implemented `POST /` and `GET /` (relative to `/api/accounts/:account_id/staging-entries`). Router uses `mergeParams: true`. (Removed `PUT /status` endpoint).
+    7.  **Main Router (`src/server/routes/index.js`):** Mounted staging entry router at `/api/accounts/:account_id/staging-entries`.
+    8.  **Swagger Documentation:**
+        - Updated `src/config/swaggerDef.js` with relevant schemas. JSDoc comments in route files updated for new paths.
+    9.  **Memory Bank Entity File:** Created and updated `memory-bank/entities/staging-entries.md` to reflect API path changes.
+    10. **API Tests (`tests/staging-entry/staging-entry.js`):** Updated tests for new nested paths and removal of PUT endpoint tests. All tests passed.
+    11. **Memory Bank Update (`activeContext.md`):** Updated to reflect completion and refinement of Staging Entry API (nested routes, no update API).
+
+- **Status (End of Staging Entry API Implementation):**
+    - Staging Entry API for creating and listing pre-processed financial movements (nested under accounts) is implemented. (Update API removed).
+    - Database schema updated and migrated.
+    - Core logic, API routes, Swagger documentation, and Memory Bank entity file are complete.
+    - API tests are in place and passing.
+
+- **Next Steps (from `activeContext.md`):**
+    1. This `progress.md` update (Done).
+    2. Discuss and plan the database schema and APIs for final "Entries" and "Transactions".
+    3. Implement API endpoints for creating and managing these final entries and transactions.
+    4. Implement logic for on-the-fly balance calculations on `Account` based on final `Entry` records.
+    5. Write API tests for new final Entry and Transaction endpoints.
+    6. Address TODOs from previous phases.
+    7. Begin design/implementation of the "recon engine".
