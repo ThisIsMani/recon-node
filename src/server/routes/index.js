@@ -4,6 +4,8 @@ const merchantRoutes = require('./merchant'); // Import merchant routes
 const accountRoutes = require('./account'); // Import account routes
 const reconRulesRoutes = require('./recon-rules');
 const stagingEntryRoutes = require('./staging-entry');
+const entryRoutes = require('./entry'); // Import entry routes
+const transactionRoutes = require('./transaction'); // Import transaction routes
 
 const router = express.Router();
 
@@ -21,6 +23,12 @@ router.use('/recon-rules', reconRulesRoutes);
 
 // Mount staging entries routes (nested under accounts)
 router.use('/accounts/:account_id/staging-entries', stagingEntryRoutes);
+
+// Mount entry routes (nested under accounts)
+router.use('/accounts/:account_id/entries', entryRoutes);
+
+// Mount transaction routes (nested under merchants)
+router.use('/merchants/:merchant_id/transactions', transactionRoutes);
 
 // Mount other resource routes here in the future
 // e.g., const ledgerRoutes = require('./ledger');

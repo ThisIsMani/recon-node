@@ -7,6 +7,20 @@
 
 ---
 
+**2025-05-19 (Transactions API Implementation - Phase 1: GET Endpoint):**
+
+- **Task:** Define the `Transaction` model and `TransactionStatus` enum. Implement the GET API endpoint (`/api/merchants/:merchant_id/transactions`) for listing transactions, along with associated core logic, documentation, and tests. Transactions will not have a direct creation API in this phase.
+- **Status:** In Progress.
+
+---
+
+**2025-05-19 (Entries API Implementation - Phase 1: GET Endpoint):**
+
+- **Task:** Define the `Entry` model and `EntryStatus` enum. Implement the GET API endpoint (`/api/accounts/:account_id/entries`) for listing entries, along with associated core logic, documentation, and tests. Entries will not have a direct creation API in this phase.
+- **Status:** In Progress.
+
+---
+
 **2025-05-19 (Accounts API Implementation):**
 
 - **Task:** Implement the "Accounts" API (Create, List, Delete) associated with merchants.

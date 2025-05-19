@@ -10,13 +10,68 @@ generator client {
 model MerchantAccount {
   merchant_id   String @id @db.VarChar(255)
   merchant_name String @db.VarChar(255)
-  accounts      Account[] // Relation to multiple accounts
+  accounts      Account[]       // Relation to multiple accounts
+  transactions  Transaction[]   // Relation to multiple transactions
   // Future: Add relations to other models like 'Account' for the Smart Ledger
 }
 
+enum EntryStatus {
+  EXPECTED
+  POSTED
+  ARCHIVED
+}
+
+model Entry {
+  entry_id         String      @id @default(cuid())
+  account_id       String
+  transaction_id   String?     // Foreign Key to Transaction model
+  entry_type       EntryType
+  amount           Decimal
+  currency         String
+  status           EntryStatus
+  effective_date   DateTime    // Renamed from entry_date for consistency
+  metadata         Json?       @db.JsonB
+  discarded_at     DateTime?   // Should be set when status is ARCHIVED
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  account          Account     @relation(fields: [account_id], references: [account_id])
+  transaction      Transaction? @relation(fields: [transaction_id], references: [transaction_id])
+
+  @@index([account_id])
+  @@index([transaction_id])
+  @@index([status])
+  @@index([effective_date])
+}
+
+enum TransactionStatus {
+  EXPECTED
+  POSTED
+  MISMATCH
+  ARCHIVED
+}
+
+model Transaction {
+  transaction_id         String            @id @default(cuid())
+  logical_transaction_id String            @default(cuid())
+  version                Int               @default(1)
+  merchant_id            String            @db.VarChar(255)
+  status                 TransactionStatus
+  created_at             DateTime          @default(now())
+  updated_at             DateTime          @updatedAt
+  discarded_at           DateTime?         
+  metadata               Json?             @db.JsonB
+
+  merchant               MerchantAccount   @relation(fields: [merchant_id], references: [merchant_id])
+  entries                Entry[]           // Relation to multiple entries
+
+  @@index([logical_transaction_id])
+  @@index([merchant_id])
+  @@index([status])
+  @@unique([logical_transaction_id, version])
+}
+
 // Future: Define other models for the Smart Ledger here
-// model Entry { ... }
-// model Transaction { ... }
 
 model ReconRule {
   id               String   @id @default(cuid())
@@ -76,6 +131,7 @@ model Account {
   reconRulesAsOne ReconRule[] @relation("ReconRuleAccountOne")
   reconRulesAsTwo ReconRule[] @relation("ReconRuleAccountTwo")
   stagingEntries  StagingEntry[]
+  entries         Entry[]     // Relation to Entry model
 
   @@index([merchant_id])
 }

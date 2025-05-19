@@ -172,6 +172,56 @@ const options = {
             }
           ]
         },
+        EntryStatusEnum: {
+          type: 'string',
+          enum: ['EXPECTED', 'POSTED', 'ARCHIVED'],
+          description: 'Status of a ledger entry.',
+          example: 'POSTED'
+        },
+        TransactionStatusEnum: {
+          type: 'string',
+          enum: ['EXPECTED', 'POSTED', 'MISMATCH', 'ARCHIVED'],
+          description: 'Status of a financial transaction.',
+          example: 'POSTED'
+        },
+        Transaction: {
+          type: 'object',
+          properties: {
+            transaction_id: { type: 'string', description: 'Unique ID of the transaction version.', example: 'clxmgmefg000208l3h4j5k6l7' },
+            logical_transaction_id: { type: 'string', description: 'Common ID for all versions of this logical transaction.', example: 'clxmgmefg000208l3h4j5k6l8' },
+            version: { type: 'integer', description: 'Version number of this transaction.', example: 1 },
+            merchant_id: { type: 'string', description: 'Merchant this transaction belongs to.' },
+            status: { $ref: '#/components/schemas/TransactionStatusEnum' },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+            discarded_at: { type: 'string', format: 'date-time', nullable: true },
+            metadata: { type: 'object', nullable: true },
+            entries: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/Entry'
+              },
+              description: 'List of entries part of this transaction.'
+            }
+          }
+        },
+        Entry: {
+          type: 'object',
+          properties: {
+            entry_id: { type: 'string', description: 'Unique ID of the ledger entry.', example: 'clxmgmefg000208l3h4j5k6l7' },
+            account_id: { type: 'string', description: 'Associated account ID.' },
+            transaction_id: { type: 'string', nullable: true, description: 'Associated transaction ID (if any).' },
+            entry_type: { $ref: '#/components/schemas/EntryTypeEnum' },
+            amount: { type: 'number', format: 'decimal', description: 'Monetary amount.' },
+            currency: { type: 'string', description: '3-letter currency code.' },
+            status: { $ref: '#/components/schemas/EntryStatusEnum' },
+            effective_date: { type: 'string', format: 'date-time', description: 'Effective date of the entry.' },
+            metadata: { type: 'object', nullable: true, description: 'Optional JSON metadata.' },
+            discarded_at: { type: 'string', format: 'date-time', nullable: true, description: 'Timestamp if entry is archived and effectively discarded.' },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' }
+          }
+        },
         StagingEntryStatusEnum: {
           type: 'string',
           enum: ['NEEDS_MANUAL_REVIEW', 'PROCESSED'],
