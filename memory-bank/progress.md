@@ -207,3 +207,38 @@
 - **Next Steps:**
     - Conceptual review of tests.
     - Continue with Recon Engine development (refer to `activeContext.md` and `memory-bank/plans/2025-05-20-recon-engine-tests.md`).
+
+---
+
+**2025-05-20 (Test Fixes & Code Coverage Improvement):**
+
+- **Task:** Address test failures and improve code coverage across the application.
+- **Actions Taken:**
+    1.  **Initial Test Run & Analysis:** Ran `npm test`. Identified `TypeError` in `process-tracker` core logic due to undefined enums during tests. Noted overall code coverage at ~58%.
+    2.  **Enum Import Fix (Process Tracker):** Modified `src/server/core/process-tracker/index.js` to explicitly import `ProcessTaskType` and `ProcessTaskStatus` from `@prisma/client`. This resolved the console errors.
+    3.  **Core Logic Test Suite Creation & Coverage Improvement:**
+        - Created `tests/merchants/core/merchants.js` (renamed from `merchants.core.test.js`) for `src/server/core/merchant/index.js`. Coverage for this file reached 100%.
+        - Created `tests/entry/core/entry.js` (renamed from `entry.core.test.js`) for `src/server/core/entry/index.js`.
+        - **Enum Import Fix (Entry):** Modified `src/server/core/entry/index.js` to explicitly import `EntryType` and `EntryStatus` from `@prisma/client`, fixing test failures. Coverage for this file reached 100%.
+        - Created `tests/health/health.js` (renamed from `health.core.test.js`) for `src/server/core/health.js`. Coverage for this file reached 100%.
+        - Created `tests/recon-rules/core/recon-rules.js` (renamed from `recon-rules.core.test.js`) for `src/server/core/recon-rules/index.js`. Coverage for this file reached 97.43%.
+        - Created `tests/config/config.js` (renamed from `config.test.js`) for `src/config/index.js`.
+        - **Config File Refactor & Test Fix:**
+            - Modified `src/config/index.js` to parse `PORT` to an integer.
+            - Removed `require('dotenv').config()` from `src/config/index.js` to improve test isolation.
+            - Adjusted test expectations in `tests/config/config.js` for `config.port` type.
+            - Coverage for `src/config/index.js` reached 100%.
+    4.  **Test File Renaming & Path Correction:**
+        - Renamed newly created unit test files to `tests/<entity>/[core/]<name>.js` (e.g., `tests/merchants/core/merchants.js`, `tests/health/health.js`).
+        - Updated `require` paths within these test files to reflect their new locations.
+    5.  **Test Output Cleanup:** Modified core logic test suites to use `afterEach` for `jest.restoreAllMocks()` and ensure `console.error` spies correctly suppress output during expected error path tests.
+    6.  **Final Test Run:** All 11 test suites (85 tests) passed with clean console output. Overall statement coverage remains at **68.21%**.
+    7.  **Memory Bank Update:** Updated `activeContext.md` and this `progress.md`.
+- **Status (End of Task):**
+    - All identified test failures resolved.
+    - Code coverage significantly improved for several core modules.
+    - Overall statement coverage is 68.21%.
+    - Test console output is now clean for core logic tests.
+- **Next Steps:**
+    - Address remaining low code coverage areas if deemed necessary (e.g., `src/app.js`, `src/config/swaggerDef.js`, `src/db_models/index.js`).
+    - Continue with Recon Engine development and testing.

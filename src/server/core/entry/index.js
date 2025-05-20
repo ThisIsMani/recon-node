@@ -1,4 +1,5 @@
 const prisma = require('../../../services/prisma');
+const { EntryType, EntryStatus } = require('@prisma/client'); // Explicitly import enums
 
 /**
  * Lists entries for a specific account, with optional filtering.
@@ -72,10 +73,10 @@ const createEntryInternal = async (entryData) => {
   if (!account_id || !entry_type || amount == null || !currency || !status || !effective_date) {
     throw new Error('Missing required fields for internal entry creation: account_id, entry_type, amount, currency, status, effective_date.');
   }
-  if (!prisma.EntryType[entry_type]) {
+  if (!EntryType[entry_type]) { // Use imported enum
     throw new Error(`Invalid entry_type: ${entry_type}`);
   }
-  if (!prisma.EntryStatus[status]) {
+  if (!EntryStatus[status]) { // Use imported enum
     throw new Error(`Invalid entry status: ${status}`);
   }
   // Basic validation for account existence

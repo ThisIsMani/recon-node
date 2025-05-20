@@ -1,8 +1,9 @@
-// Load environment variables from .env file
-require('dotenv').config();
+// Environment variables should be loaded by the application's entry point (e.g., server.js or app.js)
+// or by a test setup file (like jest.globalSetup.js), not within the config module itself
+// to allow for better testability and control over environment variables during tests.
 
 const config = {
-    port: process.env.PORT || 3000,
+    port: parseInt(process.env.PORT || '3000', 10),
     database: {
         user: process.env.DB_USER,
         host: process.env.DB_HOST,
