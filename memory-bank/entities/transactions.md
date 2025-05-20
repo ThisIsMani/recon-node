@@ -39,6 +39,7 @@ model Transaction {
 
 **Core Logic (`src/server/core/transaction/index.js`):**
 - `listTransactions(merchant_id, queryParams)`: Retrieves transactions for a given merchant, allowing filtering. Includes related entries.
+- `createTransactionInternal(transactionShellData, entriesData)`: (Internal function) Creates a transaction and its associated entries, ensuring each entry is linked via `transaction_id`.
 
 **Lifecycle & Purpose:**
 - `EXPECTED`: Contains at least one `expected` entry and no `pending_confirmation` or `mismatched` entries. Awaiting actuals.
@@ -49,6 +50,7 @@ model Transaction {
 **Versioning for Corrections:**
 If a `POSTED` transaction needs correction, its status becomes `ARCHIVED`. A new transaction is created with the same `logical_transaction_id` and an incremented `version`, containing the corrected set of entries.
 
-**Future Considerations:**
-- A join table (`TransactionEntry`) will be introduced to manage the many-to-many relationship between `Transaction` and `Entry` if a single entry could belong to multiple transactions (though current model implies Entry has one Transaction via `transaction_id`). For now, `Entry.transaction_id` provides a one-to-many from Transaction to Entry.
-- Internal processes will be responsible for creating `Transaction` records and linking `Entry` records to them.
+**Relationship with Entries:**
+- A `Transaction` groups one or more `Entry` records.
+- The relationship is one-to-many: one `Transaction` can have multiple `Entry` records, and each `Entry` *must* belong to exactly one `Transaction` (enforced by the mandatory `Entry.transaction_id` foreign key).
+- Internal processes, like `createTransactionInternal` or the Recon Engine, are responsible for creating `Transaction` records and ensuring all associated `Entry` records are correctly linked.

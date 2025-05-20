@@ -40,6 +40,79 @@ const listEntries = async (accountId, queryParams) => {
   }
 };
 
+/**
+ * Creates a new entry internally. Not exposed via API.
+ * Used by system processes like the Recon Engine.
+ * @param {object} entryData - Data for the new entry.
+ * @param {string} entryData.account_id - The ID of the account.
+ * @param {string} [entryData.transaction_id] - Optional: The ID of the transaction this entry belongs to.
+ * @param {string} entryData.entry_type - Type of entry (DEBIT/CREDIT from EntryType enum).
+ * @param {Decimal} entryData.amount - Amount of the entry.
+ * @param {string} entryData.currency - Currency code.
+ * @param {string} entryData.status - Status of the entry (from EntryStatus enum).
+ * @param {Date} entryData.effective_date - Effective date of the entry.
+ * @param {object} [entryData.metadata] - Optional: JSON metadata.
+ * @param {Date} [entryData.discarded_at] - Optional: Timestamp if entry is archived.
+ * @returns {Promise<Entry>} The newly created entry object.
+ */
+const createEntryInternal = async (entryData) => {
+  const {
+    account_id,
+    transaction_id,
+    entry_type,
+    amount,
+    currency,
+    status,
+    effective_date,
+    metadata,
+    discarded_at,
+  } = entryData;
+
+  // Basic validation
+  if (!account_id || !entry_type || amount == null || !currency || !status || !effective_date) {
+    throw new Error('Missing required fields for internal entry creation: account_id, entry_type, amount, currency, status, effective_date.');
+  }
+  if (!prisma.EntryType[entry_type]) {
+    throw new Error(`Invalid entry_type: ${entry_type}`);
+  }
+  if (!prisma.EntryStatus[status]) {
+    throw new Error(`Invalid entry status: ${status}`);
+  }
+  // Basic validation for account existence
+  const account = await prisma.account.findUnique({ where: { account_id } });
+  if (!account) {
+    throw new Error(`Account with ID ${account_id} not found for internal entry creation.`);
+  }
+  // Optional: Validate transaction_id if provided
+  if (transaction_id) {
+    const transaction = await prisma.transaction.findUnique({ where: { transaction_id } });
+    if (!transaction) {
+      throw new Error(`Transaction with ID ${transaction_id} not found for internal entry creation.`);
+    }
+  }
+
+  try {
+    const newEntry = await prisma.entry.create({
+      data: {
+        account_id,
+        transaction_id,
+        entry_type,
+        amount,
+        currency,
+        status,
+        effective_date: new Date(effective_date),
+        metadata,
+        discarded_at: discarded_at ? new Date(discarded_at) : undefined,
+      },
+    });
+    return newEntry;
+  } catch (error) {
+    console.error(`Error creating internal entry for account ${account_id}:`, error);
+    throw new Error('Could not create internal entry.');
+  }
+};
+
 module.exports = {
   listEntries,
+  createEntryInternal, // Exporting for use by other core modules
 };

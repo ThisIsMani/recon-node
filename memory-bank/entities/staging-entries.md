@@ -43,7 +43,7 @@ enum EntryType {
 - `GET /api/accounts/:account_id/staging-entries`: List staging entries for the specified account. Supports filtering by `status` via query parameters.
 
 **Core Logic (`src/server/core/staging-entry/index.js`):**
-- `createStagingEntry(account_id, entryData)`: Creates a new entry for the given account_id.
+- `createStagingEntry(account_id, entryData)`: Creates a new entry for the given account_id. **Upon successful creation, this function also acts as a "producer" by creating a `PROCESS_STAGING_ENTRY` task in the `ProcessTracker` for the Recon Engine to consume.**
 - `listStagingEntries(account_id, queryParams)`: Lists entries for the given account_id, allowing for filtering. Includes related account details.
 
 **Lifecycle & Purpose:**

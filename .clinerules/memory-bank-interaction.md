@@ -20,7 +20,9 @@ This rule outlines how Cline should interact with the refactored Memory Bank for
 - **Entity-Specific Details:** For information related to specific entities (like Merchants or Accounts), consult the corresponding file within the `memory-bank/entities/` directory.
 - **Current State & History:** Review `activeContext.md` for the latest focus and `progress.md` for historical context and task evolution.
 - **Task-Specific Plans:** If a task refers to a plan, consult the relevant file in the `plans/` directory.
-- **Loading Protocol:** If `use_memory = true` (set at session start or by user command "load memory bank now"), proactively load and review relevant Memory Bank files at the beginning of a new task or when significant context is required.
+- **Loading Protocol:** If `use_memory = true` (set at session start or by user command "load memory bank now"):
+    - Initially, at the start of a task or when `use_memory` becomes true, proactively load and review high-level Memory Bank files. This includes `memory-bank/index.md`, `memory-bank/activeContext.md`, and the Core Documents (`projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`).
+    - Other, more specific files (such as those in `memory-bank/entities/` or `memory-bank/plans/`) should be read on an as-needed basis to conserve context window, guided by the information in the initially loaded files or the user's task.
 
 ## Updating the Memory Bank
 - **Post-Task Updates:** After completing significant tasks, making key decisions, or implementing substantial changes, update the relevant Memory Bank files.

@@ -1,33 +1,31 @@
-# Active Context: Smart Ledger Backend (Node.js) - Transactions API
+# Active Context: Smart Ledger Backend (Node.js) - Mandatory Entry-Transaction Link
 
 **Current Focus:**
-- Implementation of the "Transactions" API, specifically the GET endpoint for listing transactions associated with a merchant.
-- Defining the `Transaction` model and `TransactionStatus` enum in Prisma.
+- Modifying the database schema and related documentation to enforce a mandatory one-to-many relationship between `Transaction` and `Entry` entities.
+- Specifically, making the `transaction_id` foreign key on the `Entry` model non-optional.
 
-**Key Decisions & Design Points for Transactions API:**
-- **Database (`prisma/schema.prisma`):**
-  - New `TransactionStatus` enum: `EXPECTED`, `POSTED`, `MISMATCH`, `ARCHIVED`.
-  - New `Transaction` model: `transaction_id`, `logical_transaction_id`, `version`, `merchant_id`, `status`, `created_at`, `updated_at`, `discarded_at?`, `metadata?`.
-  - `Transaction` model has `entries Entry[]` relation.
-  - `Entry` model's `transaction_id` field updated to establish FK to `Transaction.transaction_id`.
-  - `MerchantAccount` model updated with `transactions Transaction[]` relation.
-- **API Endpoints:**
-  - `GET /api/merchants/:merchant_id/transactions`: Lists transactions for a specific merchant. Supports filtering by `status`, `logical_transaction_id`, `version`.
-  - **No direct creation API (`POST`) for Transactions.** They are intended to be created by internal system processes.
-- **Core Logic (`src/server/core/transaction/index.js`):**
-  - `listTransactions(merchant_id, queryParams)`: Fetches transactions, includes related entries, orders by `created_at` descending.
-- **Routing:** New transaction router mounted at `/api/merchants/:merchant_id/transactions` with `mergeParams: true`.
-- **Documentation:**
-  - Swagger API documentation (`src/config/swaggerDef.js` and JSDoc in routes) updated.
-  - New Memory Bank entity file `memory-bank/entities/transactions.md` created.
-- **Testing:** API tests for the GET endpoint implemented in `tests/transaction/transaction.js`.
+**Key Decisions & Changes:**
+1.  **Schema Modification (`prisma/schema.prisma`):**
+    *   In the `Entry` model, `transaction_id` changed from `String?` to `String`.
+    *   The `transaction` relation in the `Entry` model changed from `Transaction?` to `Transaction`.
+2.  **Database Migration:**
+    *   A Prisma migration (`make_entry_transaction_id_mandatory`) has been successfully applied to reflect the schema changes in the database.
+3.  **Relationship Clarification:**
+    *   Confirmed that the existing one-to-many relationship is desired (one `Transaction` to many `Entry` records).
+    *   An `Entry` must now always belong to a `Transaction`.
+    *   No new join table is being introduced.
+4.  **Deletion Behavior:**
+    *   Transactions are not expected to be deleted. Prisma's default `onDelete: Restrict` behavior for the relation is acceptable, which would prevent deleting a `Transaction` if it has linked `Entry` records.
+5.  **Core Logic:**
+    *   Existing core functions like `createTransactionInternal` (which links entries during creation) are expected to be compatible. `createEntryInternal` will now implicitly require `transaction_id`.
+6.  **Memory Bank Updates:**
+    *   `memory-bank/entities/entries.md` updated to reflect mandatory `transaction_id`.
+    *   `memory-bank/entities/transactions.md` updated to clarify the mandatory one-to-many relationship.
 
-**Next Steps (High-Level, during this task):**
-1.  Execute the plan for Transactions API (schema, migration, core logic, routes, docs, tests). (Currently in progress)
-2.  Ensure all tests pass.
-3.  Commit changes with a descriptive message (e.g., "feat: Implement Transactions API (GET) and model").
+**Next Steps (Immediate for this task):**
+1.  Update `memory-bank/progress.md` to log the completion of this task.
+2.  Conceptually review tests to ensure they align with the mandatory `transaction_id` on `Entry`. (No direct code changes planned unless issues are found).
 
-**Future Considerations (Post-Transactions API):**
-- Implement the join table for `Transaction` and `Entry` if a many-to-many relationship is needed (current plan is one-to-many from Transaction to Entry).
-- Develop internal mechanisms for creating `Transaction` records and linking `Entry` records.
-- Implement logic for transaction balancing checks (`total debits = total credits` for `POSTED` status).
+**Broader Next Steps (Post this task):**
+- Continue with Recon Engine development, particularly testing (as per `memory-bank/plans/2025-05-20-recon-engine-tests.md`).
+- Address any further refinements or enhancements for the Recon Engine.

@@ -15,7 +15,12 @@ Detailed information about specific business entities, their data models, API en
 
 - **[Merchants (`entities/merchants.md`)](./entities/merchants.md):** Information related to Merchant accounts.
 - **[Accounts (`entities/accounts.md`)](./entities/accounts.md):** Information related to financial Accounts associated with Merchants.
-- *(Future entities like Entries, Transactions, Rules will be added here as they are developed.)*
+- **[Recon Rules (`entities/recon-rules.md`)](./entities/recon-rules.md):** Information related to Reconciliation Rules.
+- **[Staging Entries (`entities/staging-entries.md`)](./entities/staging-entries.md):** Information related to Staging Entries.
+- **[Entries (`entities/entries.md`)](./entities/entries.md):** Information related to final Ledger Entries.
+- **[Transactions (`entities/transactions.md`)](./entities/transactions.md):** Information related to financial Transactions grouping Entries.
+- **[Process Tracker (`entities/process-tracker.md`)](./entities/process-tracker.md):** Information related to the task management system for the Recon Engine.
+- *(Future entities will be added here as they are developed.)*
 
 ## Operational Documents
 
@@ -36,4 +41,4 @@ Detailed information about specific business entities, their data models, API en
 ---
 
 *This Memory Bank is maintained by Cline, your AI software engineer, to ensure continuity and context across development sessions.*
-*Last Refreshed: 2025-05-19*
+*Last Refreshed: 2025-05-20*

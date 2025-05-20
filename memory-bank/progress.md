@@ -188,3 +188,22 @@
     5. Write API tests for new final Entry and Transaction endpoints.
     6. Address TODOs from previous phases.
     7. Begin design/implementation of the "recon engine".
+
+---
+
+**2025-05-20 (Mandatory Entry-Transaction Link):**
+
+- **Task:** Modify the Prisma schema to make the `transaction_id` field on the `Entry` model non-optional, ensuring every entry is linked to a transaction.
+- **Actions Taken:**
+    1.  Updated `prisma/schema.prisma`:
+        *   In `Entry` model: `transaction_id` changed from `String?` to `String`.
+        *   `transaction` relation changed from `Transaction?` to `Transaction`.
+    2.  Ran Prisma migration `make_entry_transaction_id_mandatory` successfully.
+    3.  Reviewed core logic (`createEntryInternal`, `createTransactionInternal`) for compatibility.
+    4.  Updated Memory Bank: `entities/entries.md`, `entities/transactions.md`, `activeContext.md`.
+- **Status (End of Task):**
+    - Schema updated and migrated. `Entry.transaction_id` is now mandatory.
+    - Relevant documentation updated.
+- **Next Steps:**
+    - Conceptual review of tests.
+    - Continue with Recon Engine development (refer to `activeContext.md` and `memory-bank/plans/2025-05-20-recon-engine-tests.md`).

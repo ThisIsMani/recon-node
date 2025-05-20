@@ -5,6 +5,7 @@ const prisma = require('../../src/services/prisma');
 describe('Entry API - GET /api/accounts/:account_id/entries', () => {
   let testMerchant;
   let testAccount;
+  let dummyTransaction; // Added for linking entries
   // Sample entries to be created for testing
   const entryData = [
     {
@@ -57,23 +58,43 @@ describe('Entry API - GET /api/accounts/:account_id/entries', () => {
       },
     });
 
+    // 2.5 Create a dummy transaction to link entries to
+    dummyTransaction = await prisma.transaction.create({
+      data: {
+        merchant_id: testMerchant.merchant_id,
+        status: 'POSTED', // Or any valid status
+        // logical_transaction_id and version will default
+      },
+    });
+
     // 3. Create some entries directly in the DB for this account (since no POST API)
     for (const data of entryData) {
       await prisma.entry.create({
         data: {
           ...data,
           account_id: testAccount.account_id,
+          transaction_id: dummyTransaction.transaction_id, // Link to the dummy transaction
         },
       });
     }
   });
 
   afterAll(async () => {
-    // Clean up: delete entries, account, and merchant
-    // Order matters due to foreign key constraints if cascading deletes aren't set up for all relations
-    await prisma.entry.deleteMany({ where: { account_id: testAccount.account_id } });
-    await prisma.account.delete({ where: { account_id: testAccount.account_id } });
-    await prisma.merchantAccount.delete({ where: { merchant_id: testMerchant.merchant_id } });
+    // Clean up: delete entries, transaction, account, and merchant
+    // Order matters due to foreign key constraints
+    if (dummyTransaction) {
+      await prisma.entry.deleteMany({ where: { transaction_id: dummyTransaction.transaction_id } });
+      await prisma.transaction.delete({ where: { transaction_id: dummyTransaction.transaction_id } });
+    } else {
+      // Fallback if dummyTransaction wasn't created, though it should be
+      await prisma.entry.deleteMany({ where: { account_id: testAccount.account_id } });
+    }
+    if (testAccount) {
+      await prisma.account.delete({ where: { account_id: testAccount.account_id } });
+    }
+    if (testMerchant) {
+      await prisma.merchantAccount.delete({ where: { merchant_id: testMerchant.merchant_id } });
+    }
     await prisma.$disconnect();
     // server.close(); // Supertest handles server lifecycle when passed the app instance
   });

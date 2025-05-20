@@ -36,3 +36,11 @@
 - **Centralized Routing:** A main router (`src/server/routes/index.js`) aggregates feature-specific routers.
 - **Error Handling:** Basic centralized error handling middleware in `src/app.js`. Prisma-specific errors (e.g., unique constraint violations) are handled in core logic.
 - **API Documentation:** Swagger UI served at `/api-docs`, generated from JSDoc comments in route files using `swagger-jsdoc` and `swagger-ui-express`.
+- **Producer-Consumer Pattern (Recon Engine):**
+    - **Process Tracker (`src/server/core/process-tracker`):** A database-backed queue (`ProcessTracker` model) manages tasks for asynchronous processing. Core functions include `createTask`, `getNextPendingTask`, `updateTaskStatus`.
+    - **Producer (`src/server/core/staging-entry`):** The `createStagingEntry` function acts as a producer. Upon successful creation of a `StagingEntry`, it enqueues a `PROCESS_STAGING_ENTRY` task into the Process Tracker.
+    - **Consumer (`src/server/core/recon-engine/consumer.js`):** A separate process (run by `src/recon-engine-runner.js`) that polls the Process Tracker for pending tasks.
+        - It fetches `StagingEntry` data based on task payload.
+        - Transforms `StagingEntry` data into `Transaction` and linked `Entry` records using internal core functions (`transactionCore.createTransactionInternal`, which calls `entryCore.createEntryInternal`).
+        - Updates `StagingEntry` and `ProcessTracker` task statuses.
+    - This pattern decouples the initial data ingestion (e.g., API creating `StagingEntry`) from more complex, potentially long-running processing, improving API responsiveness and system resilience.

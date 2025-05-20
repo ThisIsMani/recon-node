@@ -15,6 +15,11 @@ model MerchantAccount {
   // Future: Add relations to other models like 'Account' for the Smart Ledger
 }
 
+enum ProcessTaskType {
+  PROCESS_STAGING_ENTRY
+  // Future task types can be added here
+}
+
 enum EntryStatus {
   EXPECTED
   POSTED
@@ -24,7 +29,7 @@ enum EntryStatus {
 model Entry {
   entry_id         String      @id @default(cuid())
   account_id       String
-  transaction_id   String?     // Foreign Key to Transaction model
+  transaction_id   String      // Foreign Key to Transaction model
   entry_type       EntryType
   amount           Decimal
   currency         String
@@ -36,7 +41,7 @@ model Entry {
   updated_at       DateTime    @updatedAt
 
   account          Account     @relation(fields: [account_id], references: [account_id])
-  transaction      Transaction? @relation(fields: [transaction_id], references: [transaction_id])
+  transaction      Transaction  @relation(fields: [transaction_id], references: [transaction_id])
 
   @@index([account_id])
   @@index([transaction_id])
@@ -72,6 +77,31 @@ model Transaction {
 }
 
 // Future: Define other models for the Smart Ledger here
+
+enum ProcessTaskStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  RETRY // Added for tasks that might be retried
+}
+
+model ProcessTracker {
+  task_id      String            @id @default(cuid())
+  task_type    ProcessTaskType
+  payload      Json              // e.g., { "staging_entry_id": "some_id" }
+  status       ProcessTaskStatus @default(PENDING)
+  attempts     Int               @default(0)
+  last_error   String?
+  created_at   DateTime          @default(now())
+  updated_at   DateTime          @updatedAt
+  processing_started_at DateTime? // When processing began
+  completed_at DateTime?          // When task reached a final state (COMPLETED or FAILED non-retryable)
+
+  @@index([status])
+  @@index([task_type])
+  @@index([created_at])
+}
 
 model ReconRule {
   id               String   @id @default(cuid())

@@ -14,7 +14,7 @@ enum EntryStatus {
 model Entry {
   entry_id         String      @id @default(cuid())
   account_id       String
-  transaction_id   String?     // Foreign Key to a future Transaction model
+  transaction_id   String      // Foreign Key to Transaction model (Mandatory)
   entry_type       EntryType   // Reuses existing DEBIT/CREDIT enum
   amount           Decimal
   currency         String
@@ -26,13 +26,13 @@ model Entry {
   updated_at       DateTime    @updatedAt
 
   account          Account     @relation(fields: [account_id], references: [account_id])
-  // transaction   Transaction? @relation(fields: [transaction_id], references: [transaction_id]) // Future: Link to Transaction model
+  transaction      Transaction @relation(fields: [transaction_id], references: [transaction_id]) // Link to Transaction model (Mandatory)
 }
 ```
 
 **API Endpoints:**
 - `GET /api/accounts/:account_id/entries`: List entries for the specified account. Supports filtering by `status` (e.g., `EXPECTED`, `POSTED`, `ARCHIVED`) via query parameters.
-  - **Note:** There is no `POST` endpoint for creating entries directly via the API. Entries are created through internal system processes.
+  - **Note:** There is no `POST` endpoint for creating entries directly via the API. Entries are created through internal system processes, and now *must* be associated with a transaction.
 
 **Core Logic (`src/server/core/entry/index.js`):**
 - `listEntries(account_id, queryParams)`: Retrieves entries for a given account, allowing filtering by status. Includes related account details.
@@ -43,6 +43,6 @@ model Entry {
 - `ARCHIVED`: An entry that is no longer active, typically because it has been corrected, superseded, or is part of a voided transaction. The `discarded_at` field should be populated for these entries.
 
 **Future Considerations:**
-- The `Transaction` model will group related entries.
+- The `Transaction` model groups related entries. An `Entry` must always belong to a `Transaction`.
 - Logic for calculating account balances will primarily use `POSTED` entries.
-- Internal processes will be responsible for creating `Entry` records, potentially transitioning `StagingEntry` records to `Entry` records or generating `EXPECTED` entries based on system rules.
+- Internal processes are responsible for creating `Entry` records, ensuring they are linked to a `Transaction`. This typically happens when a `Transaction` is created (e.g., via `createTransactionInternal`) or when `StagingEntry` records are processed by the Recon Engine.
