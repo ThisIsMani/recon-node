@@ -17,7 +17,7 @@ router.use('/merchants', merchantRoutes);
 router.use('/merchants/:merchant_id/accounts', accountRoutes);
 
 // Mount recon rules routes
-router.use('/recon-rules', reconRulesRoutes);
+router.use('/merchants/:merchant_id/recon-rules', reconRulesRoutes);
 
 // Mount staging entries routes (nested under accounts)
 router.use('/accounts/:account_id/staging-entries', stagingEntryRoutes);
