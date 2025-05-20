@@ -12,6 +12,7 @@ model MerchantAccount {
   merchant_name String @db.VarChar(255)
   accounts      Account[]       // Relation to multiple accounts
   transactions  Transaction[]   // Relation to multiple transactions
+  reconRules    ReconRule[]     // Relation to recon rules
   // Future: Add relations to other models like 'Account' for the Smart Ledger
 }
 
@@ -105,17 +106,20 @@ model ProcessTracker {
 
 model ReconRule {
   id               String   @id @default(cuid())
+  merchant_id      String   @db.VarChar(255)
   account_one_id   String
   account_two_id   String
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 
+  merchant         MerchantAccount @relation(fields: [merchant_id], references: [merchant_id])
   accountOne       Account  @relation("ReconRuleAccountOne", fields: [account_one_id], references: [account_id])
   accountTwo       Account  @relation("ReconRuleAccountTwo", fields: [account_two_id], references: [account_id])
 
   @@unique([account_one_id, account_two_id], name: "unique_recon_rule_pair")
   @@index([account_one_id])
   @@index([account_two_id])
+  @@index([merchant_id])
 }
 
 enum StagingEntryStatus {

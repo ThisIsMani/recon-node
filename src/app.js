@@ -2,12 +2,18 @@ const express = require('express');
 const mainRouter = require('./server/routes'); // Main router from src/server/routes/index.js
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swaggerDef'); // Path to your swagger definition
-
+const cors = require('cors');
 const app = express();
 
 // Middleware
 app.use(express.json()); // For parsing application/json
 app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
+app.use(
+  cors({
+    origin: 'http://localhost:5173', // Frontend URL
+    credentials: true,
+  })
+);
 
 // Mount main API router
 app.use('/api', mainRouter); // All routes will be prefixed with /api
