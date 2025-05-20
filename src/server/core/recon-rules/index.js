@@ -87,10 +87,8 @@ async function deleteReconRule(merchant_id, rule_id) {
     // Delete the rule if it belongs to the merchant
     const deletedRule = await prisma.reconRule.delete({
       where: {
-        id_merchant_id: {
-          id: rule_id,
-          merchant_id: merchant_id,
-        },
+        id: rule_id,
+        merchant_id: merchant_id,
       },
     }).catch((error) => {
       if (error.code === 'P2025') { // Record not found
