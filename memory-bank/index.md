@@ -20,6 +20,7 @@ Detailed information about specific business entities, their data models, API en
 - **[Entries (`entities/entries.md`)](./entities/entries.md):** Information related to final Ledger Entries.
 - **[Transactions (`entities/transactions.md`)](./entities/transactions.md):** Information related to financial Transactions grouping Entries.
 - **[Process Tracker (`entities/process-tracker.md`)](./entities/process-tracker.md):** Information related to the task management system for the Recon Engine.
+- **[Recon Engine (`entities/recon-engine.md`)](./entities/recon-engine.md):** Information related to the core reconciliation engine component.
 - *(Future entities will be added here as they are developed.)*
 
 ## Operational Documents

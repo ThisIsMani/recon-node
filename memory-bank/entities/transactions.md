@@ -39,7 +39,11 @@ model Transaction {
 
 **Core Logic (`src/server/core/transaction/index.js`):**
 - `listTransactions(merchant_id, queryParams)`: Retrieves transactions for a given merchant, allowing filtering. Includes related entries.
-- `createTransactionInternal(transactionShellData, entriesData)`: (Internal function) Creates a transaction and its associated entries, ensuring each entry is linked via `transaction_id`.
+- `createTransactionInternal(transactionShellData, actualEntryData, expectedEntryData, callingTx?)`: (Internal function) Creates a transaction and its two associated, balanced entries (actual and expected) atomically using `prisma.$transaction`. It performs a balancing check (debits vs. credits) before creation.
+  - `transactionShellData`: Contains `merchant_id`, `status`, `metadata`, etc.
+  - `actualEntryData`, `expectedEntryData`: Data for the two entries to be created.
+  - `callingTx` (optional): Allows participation in an existing Prisma transaction.
+  - Throws `BalanceError` if entries do not balance.
 
 **Lifecycle & Purpose:**
 - `EXPECTED`: Contains at least one `expected` entry and no `pending_confirmation` or `mismatched` entries. Awaiting actuals.

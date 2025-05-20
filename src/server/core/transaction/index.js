@@ -1,4 +1,11 @@
 const prisma = require('../../../services/prisma');
+
+class BalanceError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'BalanceError';
+  }
+}
 const entryCore = require('../entry'); // Import entry core logic for createEntryInternal
 
 /**
@@ -58,11 +65,19 @@ const listTransactions = async (merchantId, queryParams) => {
  * @param {string} [transactionShellData.logical_transaction_id] - Optional: The logical ID.
  * @param {number} [transactionShellData.version] - Optional: Version number.
  * @param {object} [transactionShellData.metadata] - Optional: JSON metadata.
- * @param {Array<object>} entriesData - An array of entry data objects to be created and linked.
- * Each entry object should conform to the input of `entryCore.createEntryInternal`.
+ * @param {object} actualEntryData - Data for the actual entry.
+ * @param {object} expectedEntryData - Data for the expected entry.
+ * @param {object} [callingTx] - Optional: Prisma transaction client if called within an existing transaction.
  * @returns {Promise<Transaction>} The newly created transaction object, with its entries.
+ * @throws {Error} If required fields are missing or invalid.
+ * @throws {BalanceError} If entries do not balance.
  */
-const createTransactionInternal = async (transactionShellData, entriesData = []) => {
+const createTransactionInternal = async (
+  transactionShellData,
+  actualEntryData,
+  expectedEntryData,
+  callingTx
+) => {
   const {
     merchant_id,
     status,
@@ -71,59 +86,90 @@ const createTransactionInternal = async (transactionShellData, entriesData = [])
     metadata,
   } = transactionShellData;
 
+  // Validate transaction shell data
   if (!merchant_id || !status) {
     throw new Error('Missing required fields for transaction shell: merchant_id, status.');
   }
-  if (!prisma.TransactionStatus[status]) {
+  // Ensure prisma.TransactionStatus is accessible. If it's from @prisma/client, it should be imported.
+  // For now, assuming it's available globally or via prisma instance.
+  // This might need adjustment if `prisma.TransactionStatus` is not directly on the prisma instance.
+  // A safer way is `const { TransactionStatus } = require('@prisma/client');` at the top.
+  const { TransactionStatus } = require('@prisma/client');
+  if (!TransactionStatus[status]) {
     throw new Error(`Invalid transaction status: ${status}`);
   }
-  const merchant = await prisma.merchantAccount.findUnique({ where: { merchant_id } });
+
+  // Validate entry data presence
+  if (!actualEntryData || !expectedEntryData) {
+    throw new Error('Actual and expected entry data must be provided.');
+  }
+
+  const prismaClient = callingTx || prisma;
+
+  const merchant = await prismaClient.merchantAccount.findUnique({ where: { merchant_id } });
   if (!merchant) {
     throw new Error(`Merchant with ID ${merchant_id} not found.`);
   }
 
-  // TODO: Implement balancing check: sum of debits should equal sum of credits for certain statuses.
-  // For now, this check is deferred.
+  // Implement Balancing Check
+  const { EntryType } = require('@prisma/client'); // Ensure EntryType is available
 
+  if (actualEntryData.amount !== expectedEntryData.amount) {
+    throw new BalanceError(`Amounts do not balance: actual ${actualEntryData.amount}, expected ${expectedEntryData.amount}`);
+  }
+  if (actualEntryData.currency !== expectedEntryData.currency) {
+    throw new BalanceError(`Currencies do not match: actual ${actualEntryData.currency}, expected ${expectedEntryData.currency}`);
+  }
+  if (!((actualEntryData.entry_type === EntryType.DEBIT && expectedEntryData.entry_type === EntryType.CREDIT) ||
+        (actualEntryData.entry_type === EntryType.CREDIT && expectedEntryData.entry_type === EntryType.DEBIT))) {
+    throw new BalanceError('Entry types must be one DEBIT and one CREDIT.');
+  }
+  
+  // Atomic operations using Prisma interactive transactions
   try {
-    // Create the transaction shell
-    const newTransaction = await prisma.transaction.create({
-      data: {
-        merchant_id,
-        status,
-        logical_transaction_id,
-        version,
-        metadata,
-      },
+    const result = await (callingTx || prisma).$transaction(async (tx) => {
+      // Create the transaction shell
+      const newTransaction = await tx.transaction.create({
+        data: {
+          merchant_id,
+          status,
+          logical_transaction_id, // This will be undefined if not provided, which is fine
+          version,                // This will be undefined if not provided, defaulting in schema
+          metadata,
+        },
+      });
+
+      // Prepare entry data with the new transaction_id
+      const finalActualEntryData = {
+        ...actualEntryData,
+        transaction_id: newTransaction.transaction_id,
+      };
+      const finalExpectedEntryData = {
+        ...expectedEntryData,
+        transaction_id: newTransaction.transaction_id,
+      };
+
+      // Create entries using the refactored entryCore.createEntryInternal, passing the transaction client tx
+      const createdActualEntry = await entryCore.createEntryInternal(finalActualEntryData, tx);
+      const createdExpectedEntry = await entryCore.createEntryInternal(finalExpectedEntryData, tx);
+
+      return { ...newTransaction, entries: [createdActualEntry, createdExpectedEntry] };
     });
-
-    // Create and link entries
-    const createdEntries = [];
-    if (entriesData && entriesData.length > 0) {
-      for (const entryItem of entriesData) {
-        const entryToCreate = {
-          ...entryItem,
-          transaction_id: newTransaction.transaction_id, // Link to the new transaction
-        };
-        // Assuming entryCore.createEntryInternal handles its own validation (account_id, etc.)
-        const createdEntry = await entryCore.createEntryInternal(entryToCreate);
-        createdEntries.push(createdEntry);
-      }
-    }
-    
-    // Return the transaction with its entries (Prisma doesn't automatically include them on create)
-    // So, we'll just attach what we created. A full fetch could also be done.
-    return { ...newTransaction, entries: createdEntries };
-
+    return result;
   } catch (error) {
-    console.error(`Error creating internal transaction with entries for merchant ${merchant_id}:`, error);
-    // Consider if a transaction shell was created but entries failed, how to handle rollback.
-    // For now, a general error is thrown. More sophisticated transaction management might be needed.
-    throw new Error('Could not create internal transaction with entries.');
+    // Log the specific error for better debugging
+    console.error(`Error during atomic transaction creation for merchant ${merchant_id}:`, error);
+    // Re-throw a generic error or the original error if it's a BalanceError or similar custom error
+    if (error instanceof BalanceError) {
+      throw error;
+    }
+    // Add more specific error handling if needed, e.g., for Prisma-specific transaction errors
+    throw new Error('Could not create internal transaction with entries due to an internal error.');
   }
 };
 
 module.exports = {
   listTransactions,
   createTransactionInternal,
+  BalanceError, // Export BalanceError
 };

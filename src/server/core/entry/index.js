@@ -54,9 +54,10 @@ const listEntries = async (accountId, queryParams) => {
  * @param {Date} entryData.effective_date - Effective date of the entry.
  * @param {object} [entryData.metadata] - Optional: JSON metadata.
  * @param {Date} [entryData.discarded_at] - Optional: Timestamp if entry is archived.
+ * @param {object} [tx] - Optional: Prisma transaction client.
  * @returns {Promise<Entry>} The newly created entry object.
  */
-const createEntryInternal = async (entryData) => {
+const createEntryInternal = async (entryData, tx) => {
   const {
     account_id,
     transaction_id,
@@ -79,21 +80,28 @@ const createEntryInternal = async (entryData) => {
   if (!EntryStatus[status]) { // Use imported enum
     throw new Error(`Invalid entry status: ${status}`);
   }
+  const prismaClient = tx || prisma;
+
   // Basic validation for account existence
-  const account = await prisma.account.findUnique({ where: { account_id } });
+  const account = await prismaClient.account.findUnique({ where: { account_id } });
   if (!account) {
     throw new Error(`Account with ID ${account_id} not found for internal entry creation.`);
   }
-  // Optional: Validate transaction_id if provided
-  if (transaction_id) {
-    const transaction = await prisma.transaction.findUnique({ where: { transaction_id } });
+  // Transaction_id is now mandatory for an entry.
+  // If called within createTransactionInternal's $transaction block, the transaction might not be committed yet.
+  // Thus, direct validation of transaction_id existence here might be problematic if tx is the same one creating the transaction.
+  // This validation is implicitly handled by the foreign key constraint if transaction_id is invalid.
+  // If tx is provided, we assume the calling context (e.g., createTransactionInternal) manages transaction validity.
+  if (!tx && transaction_id) { // Only validate transaction if not within a $transaction that might be creating it
+    const transaction = await prismaClient.transaction.findUnique({ where: { transaction_id } });
     if (!transaction) {
       throw new Error(`Transaction with ID ${transaction_id} not found for internal entry creation.`);
     }
   }
 
+
   try {
-    const newEntry = await prisma.entry.create({
+    const newEntry = await prismaClient.entry.create({
       data: {
         account_id,
         transaction_id,

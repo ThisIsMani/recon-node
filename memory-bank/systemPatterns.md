@@ -34,13 +34,30 @@
 - **Connection Pooling:** Handled internally by Prisma Client.
 - **Asynchronous Operations:** Extensive use of `async/await` for non-blocking I/O (database calls, etc.).
 - **Centralized Routing:** A main router (`src/server/routes/index.js`) aggregates feature-specific routers.
-- **Error Handling:** Basic centralized error handling middleware in `src/app.js`. Prisma-specific errors (e.g., unique constraint violations) are handled in core logic.
+- **Logging:** A simple logger service (`src/services/logger.js`) wraps `console` methods and allows conditional logging (e.g., disabled during `NODE_ENV=test`). This is used throughout the application for consistent logging.
+- **Error Handling:** Basic centralized error handling middleware in `src/app.js`. Prisma-specific errors (e.g., unique constraint violations) are handled in core logic. Custom errors like `NoReconRuleFoundError` and `BalanceError` are used for specific business logic failures.
 - **API Documentation:** Swagger UI served at `/api-docs`, generated from JSDoc comments in route files using `swagger-jsdoc` and `swagger-ui-express`.
 - **Producer-Consumer Pattern (Recon Engine):**
     - **Process Tracker (`src/server/core/process-tracker`):** A database-backed queue (`ProcessTracker` model) manages tasks for asynchronous processing. Core functions include `createTask`, `getNextPendingTask`, `updateTaskStatus`.
     - **Producer (`src/server/core/staging-entry`):** The `createStagingEntry` function acts as a producer. Upon successful creation of a `StagingEntry`, it enqueues a `PROCESS_STAGING_ENTRY` task into the Process Tracker.
-    - **Consumer (`src/server/core/recon-engine/consumer.js`):** A separate process (run by `src/recon-engine-runner.js`) that polls the Process Tracker for pending tasks.
-        - It fetches `StagingEntry` data based on task payload.
-        - Transforms `StagingEntry` data into `Transaction` and linked `Entry` records using internal core functions (`transactionCore.createTransactionInternal`, which calls `entryCore.createEntryInternal`).
-        - Updates `StagingEntry` and `ProcessTracker` task statuses.
-    - This pattern decouples the initial data ingestion (e.g., API creating `StagingEntry`) from more complex, potentially long-running processing, improving API responsiveness and system resilience.
+    - **Consumer (`src/server/core/recon-engine/consumer.js`):** A separate process (run by `src/recon-engine-runner.js`) that polls the Process Tracker for pending `PROCESS_STAGING_ENTRY` tasks.
+        - For each task, it fetches the corresponding `StagingEntry`.
+        - It calls `reconEngine.processStagingEntryWithRecon(stagingEntry, merchantId)`.
+        - Based on the outcome (success or error) of `processStagingEntryWithRecon`, it updates the `ProcessTracker` task status to `COMPLETED` or `FAILED`.
+    - This pattern decouples the initial data ingestion from the more complex reconciliation and transaction creation process.
+
+- **Recon Engine Core (`src/server/core/recon-engine/engine.js`):**
+    - `generateTransactionEntriesFromStaging(stagingEntry, merchantId)`: Applies `ReconRule`s to a `StagingEntry` to derive data for an actual entry (status `POSTED`) and an expected contra-entry (status `EXPECTED`). Throws `NoReconRuleFoundError` if no rule applies.
+    - `processStagingEntryWithRecon(stagingEntry, merchantId)`:
+        - Orchestrates the reconciliation for a single `StagingEntry`.
+        - Calls `generateTransactionEntriesFromStaging`.
+        - Prepares `transactionShellData`.
+        - Calls `transactionCore.createTransactionInternal` to atomically create the `Transaction` and its two `Entry` records.
+        - If all steps succeed, it updates the `StagingEntry` status to `PROCESSED`.
+        - If `NoReconRuleFoundError` or `BalanceError` (from `createTransactionInternal`) occurs, or any other error during the process, it updates the `StagingEntry` status to `NEEDS_MANUAL_REVIEW` and then re-throws the error to be handled by the consumer (which will update the `ProcessTracker` task).
+    - This module encapsulates the primary business logic for reconciliation.
+
+- **Atomic Operations (`prisma.$transaction`):**
+    - For operations requiring multiple database writes that must succeed or fail together (e.g., creating a `Transaction` and its associated `Entry` records), Prisma's interactive transactions (`prisma.$transaction(async (tx) => { ... })`) are used.
+    - This ensures data consistency by rolling back all operations within the transaction block if any single operation fails.
+    - Example: `src/server/core/transaction/index.js` uses this pattern in `createTransactionInternal` to atomically create a transaction and its two balanced entries.

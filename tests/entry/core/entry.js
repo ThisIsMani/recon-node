@@ -178,7 +178,79 @@ describe('Entry Core Logic', () => {
       } catch (error) {
         expect(error.message).toBe('Could not create internal entry.');
       }
-      // jest.restoreAllMocks(); // Will be handled by afterEach
+    });
+
+    // Tests for when 'tx' (Prisma transaction client) is provided
+    describe('when using Prisma transaction client (tx)', () => {
+      let mockTxClient;
+
+      beforeEach(() => {
+        // Mock a Prisma transaction client
+        mockTxClient = {
+          account: {
+            findUnique: jest.fn(),
+          },
+          transaction: {
+            findUnique: jest.fn(),
+          },
+          entry: {
+            create: jest.fn(),
+          },
+        };
+      });
+
+      it('should use the provided tx client for creating an entry', async () => {
+        const entryData = validEntryData();
+        mockTxClient.account.findUnique.mockResolvedValue(testAccount); 
+        // mockTxClient.transaction.findUnique.mockResolvedValue(testTransaction); // Not needed here as tx existence check is skipped
+        mockTxClient.entry.create.mockResolvedValue({ ...entryData, entry_id: 'tx-entry-id' });
+
+        const spyPrismaAccountFindUnique = jest.spyOn(prisma.account, 'findUnique');
+        const spyPrismaEntryCreate = jest.spyOn(prisma.entry, 'create');
+
+        const newEntry = await createEntryInternal(entryData, mockTxClient);
+
+        expect(mockTxClient.account.findUnique).toHaveBeenCalledWith({ where: { account_id: entryData.account_id } });
+        expect(mockTxClient.entry.create).toHaveBeenCalledWith({
+          data: {
+            ...entryData,
+            effective_date: new Date(entryData.effective_date), // Ensure date object
+          },
+        });
+        // Global prisma client should not have been called for these operations
+        expect(spyPrismaAccountFindUnique).not.toHaveBeenCalled();
+        expect(spyPrismaEntryCreate).not.toHaveBeenCalled();
+        
+        expect(newEntry).toBeDefined();
+        expect(newEntry.entry_id).toBe('tx-entry-id');
+      });
+
+      it('should use tx client for account validation and throw if account not found via tx', async () => {
+        const entryData = { ...validEntryData(), account_id: 'non-existent-via-tx' };
+        mockTxClient.account.findUnique.mockResolvedValue(null); // Account does not exist via tx
+        
+        const spyPrismaAccountFindUnique = jest.spyOn(prisma.account, 'findUnique');
+
+        await expect(createEntryInternal(entryData, mockTxClient))
+          .rejects.toThrow('Account with ID non-existent-via-tx not found');
+        expect(mockTxClient.account.findUnique).toHaveBeenCalledWith({ where: { account_id: 'non-existent-via-tx' } });
+        expect(spyPrismaAccountFindUnique).not.toHaveBeenCalled();
+      });
+
+      it('should skip transaction_id existence check when tx is provided', async () => {
+        // This test verifies that the specific 'Transaction with ID ... not found' error,
+        // which comes from the `if (!tx && transaction_id)` block, is NOT thrown.
+        // The actual FK constraint would be handled by the DB if the tx_id is invalid during the $transaction commit.
+        const entryData = { ...validEntryData(), transaction_id: 'tx-might-not-exist-yet' };
+        mockTxClient.account.findUnique.mockResolvedValue(testAccount); // Account exists
+        // We don't mock transaction.findUnique on mockTxClient because it shouldn't be called.
+        mockTxClient.entry.create.mockResolvedValue({ ...entryData, entry_id: 'another-tx-entry-id' });
+
+        await createEntryInternal(entryData, mockTxClient);
+
+        expect(mockTxClient.transaction.findUnique).not.toHaveBeenCalled();
+        expect(mockTxClient.entry.create).toHaveBeenCalled();
+      });
     });
   });
 });

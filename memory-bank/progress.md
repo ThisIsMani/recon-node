@@ -1,5 +1,71 @@
 # Progress Log: Smart Ledger Backend (Node.js)
 
+---
+**Date:** 2025-05-20
+**Task:** Implement Logger Service and Refactor Console Usage
+**Status:** Completed
+**Summary:**
+- Created a new logger service (`src/services/logger.js`) that wraps `console` methods and allows conditional logging based on `process.env.NODE_ENV` (disabled for 'test').
+- Refactored `src/server/core/recon-engine/engine.js` and `src/server/core/recon-engine/consumer.js` to use the new logger service instead of direct `console.log`/`console.error` calls.
+- Removed `console` spies and related assertions from unit tests in `tests/recon-engine/core/engine.test.js` and `tests/recon-engine/core/consumer.js`.
+- Confirmed all 126 tests pass with a clean console output.
+- Updated Memory Bank: `plans/2025-05-20-logger-service-refactor.md`, `systemPatterns.md`, `activeContext.md`, and this progress log.
+**Issues/Notes:** None.
+
+---
+**Date:** 2025-05-20
+**Task:** Recon Engine - Phase 3: Update Consumer Logic
+**Status:** Completed
+**Summary:**
+- Modified `src/server/core/recon-engine/engine.js`:
+    - Added new function `processStagingEntryWithRecon(stagingEntry, merchantId)`.
+    - This function calls `generateTransactionEntriesFromStaging` and `transactionCore.createTransactionInternal`.
+    - It handles `NoReconRuleFoundError` and `BalanceError` by updating the `StagingEntry` status to `NEEDS_MANUAL_REVIEW` and then re-throwing the error.
+    - On successful transaction creation, it updates the `StagingEntry` status to `PROCESSED`.
+- Modified `src/server/core/recon-engine/consumer.js`:
+    - The `processSingleTask` function now calls `reconEngine.processStagingEntryWithRecon`.
+    - It updates the `ProcessTracker` task to `COMPLETED` on success or `FAILED` if any error is thrown by `processStagingEntryWithRecon`.
+    - Error handling within the consumer is now generic, relying on the engine to manage `StagingEntry` status for specific errors.
+- Added unit tests for `processStagingEntryWithRecon` in `tests/recon-engine/core/recon-engine.js`.
+- Created new test file `tests/recon-engine/core/consumer.js` with unit tests for the updated consumer logic.
+- All 126 tests were passing (prior to logger refactor which maintained passing tests).
+- Updated Memory Bank: `plans/2025-05-20-recon-consumer-update-v3.md`, `entities/recon-engine.md`, `systemPatterns.md`, `activeContext.md`.
+**Issues/Notes:** Initial test runs after this phase showed console logs/errors; this was addressed in a subsequent logger refactoring task.
+
+---
+**Date:** 2025-05-20
+**Task:** Atomic Transaction and Entry Creation
+**Status:** Completed
+**Summary:**
+- Defined `BalanceError` custom error in `src/server/core/transaction/index.js`.
+- Refactored `createEntryInternal` to accept an optional Prisma transaction client (`tx`).
+- Refactored `createTransactionInternal`:
+    - Updated signature to `(transactionShellData, actualEntryData, expectedEntryData, callingTx?)`.
+    - Implemented balancing check (amounts, currencies, DEBIT/CREDIT pair).
+    - Wrapped DB operations in `prisma.$transaction` for atomicity.
+    - Calls refactored `createEntryInternal` with the transaction client.
+- Updated unit tests for `createEntryInternal` and `createTransactionInternal`. All tests pass.
+- Updated Memory Bank: `entities/transactions.md`, `entities/entries.md`, `systemPatterns.md`, `activeContext.md`.
+**Issues/Notes:** None.
+
+---
+**Date:** 2025-05-20
+**Task:** Recon Engine - Phase 1: Implement Core Component (`engine.js`)
+**Status:** Completed
+**Summary:**
+- Created `src/server/core/recon-engine/engine.js`.
+- Implemented `async function generateTransactionEntriesFromStaging(stagingEntry, merchantId)`:
+  - Extracts `order_id` from `stagingEntry.metadata`.
+  - Prepares "actual" entry data (status `POSTED`).
+  - Finds `ReconRule` using `stagingEntry.account_id` and `merchantId`.
+  - Throws `NoReconRuleFoundError` if no rule is found.
+  - Generates "expected" entry data (status `EXPECTED`, contra-account from rule, mirrored financials).
+  - Returns `[actualEntryData, expectedEntryData]`.
+- Defined `NoReconRuleFoundError` custom error.
+- Created unit tests for `generateTransactionEntriesFromStaging` in `tests/recon-engine/core/recon-engine.js` (filename corrected). All 6 tests pass.
+- Updated Memory Bank: `recon-engine.md` (new), `index.md`, `entries.md`, `systemPatterns.md`, `activeContext.md`, `plans/2025-05-20-recon-engine-tests.md`.
+**Issues/Notes:** None.
+
 **2025-05-19 (Initial Setup & Merchants API):**
 
 - **Task:** Pivot from Python/Gemini to a pure Node.js/Express/PostgreSQL backend for the Smart Ledger application. Set up the initial project structure, database connection, a `/api/health` endpoint, Merchant API, and documentation.

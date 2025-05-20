@@ -52,7 +52,34 @@ This document outlines the test strategy for the initial phase of the Recon Engi
      - **No Task Case:**
        - `getNextPendingTask` returns `null`. Verify no further processing occurs.
 
-### 4. Internal Data Creation Functions
+### 4. Recon Engine Core Logic (`src/server/core/recon-engine/engine.js`)
+   - **`generateTransactionEntriesFromStaging(stagingEntry, merchantId)`:**
+     - Mock `prisma.reconRule.findFirst`.
+     - **Success Case (Rule Found):**
+       - Provide a `stagingEntry` and `merchantId`.
+       - Mock `prisma.reconRule.findFirst` to return a valid `ReconRule`.
+       - Verify the returned array contains two entry data objects.
+       - **Actual Entry Data:**
+         - Check `account_id`, `entry_type`, `amount`, `currency`, `effective_date` match `stagingEntry`.
+         - Check `status` is `POSTED`.
+         - Check `metadata` includes `order_id` (if present in `stagingEntry.metadata`) and `source_staging_entry_id`.
+       - **Expected Entry Data:**
+         - Check `account_id` is the correct contra-account from the rule.
+         - Check `entry_type` is the opposite of `stagingEntry.entry_type`.
+         - Check `amount`, `currency`, `effective_date` match `stagingEntry`.
+         - Check `status` is `EXPECTED`.
+         - Check `metadata` includes `order_id` (if present) and `recon_rule_id`.
+     - **No Rule Found Case:**
+       - Mock `prisma.reconRule.findFirst` to return `null`.
+       - Verify that `NoReconRuleFoundError` is thrown.
+     - **`order_id` Handling:**
+       - Test with `stagingEntry.metadata` containing `order_id`. Verify it's in both output entries' metadata.
+       - Test with `stagingEntry.metadata` *not* containing `order_id` (or `metadata` being null). Verify `order_id` is undefined or not present in output entries' metadata.
+     - **Varying Entry Types (DEBIT/CREDIT):**
+       - Test with `stagingEntry.entry_type` as `DEBIT`, verify expected entry is `CREDIT`.
+       - Test with `stagingEntry.entry_type` as `CREDIT`, verify expected entry is `DEBIT`.
+
+### 5. Internal Data Creation Functions
    - **`transactionCore.createTransactionInternal(transactionShellData, entriesData)`:**
      - Mock `entryCore.createEntryInternal`.
      - Test successful creation of transaction shell and associated entries.
