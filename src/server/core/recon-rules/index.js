@@ -84,22 +84,19 @@ async function listReconRules(merchant_id) {
 
 async function deleteReconRule(merchant_id, rule_id) {
   try {
-    // First, verify the rule belongs to the merchant
-    const rule = await prisma.reconRule.findUnique({
-      where: { id: rule_id },
-    });
-
-    if (!rule) {
-      throw new Error(`Recon rule with ID ${rule_id} not found.`);
-    }
-    if (rule.merchant_id !== merchant_id) {
-      throw new Error(`Recon rule with ID ${rule_id} does not belong to merchant ${merchant_id}.`);
-    }
-
+    // Delete the rule if it belongs to the merchant
     const deletedRule = await prisma.reconRule.delete({
       where: {
-        id: rule_id,
+        id_merchant_id: {
+          id: rule_id,
+          merchant_id: merchant_id,
+        },
       },
+    }).catch((error) => {
+      if (error.code === 'P2025') { // Record not found
+        throw new Error(`Recon rule with ID ${rule_id} not found or does not belong to merchant ${merchant_id}.`);
+      }
+      throw error;
     });
     return deletedRule;
   } catch (error) {
