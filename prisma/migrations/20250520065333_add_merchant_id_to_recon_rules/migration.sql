@@ -5,8 +5,14 @@
 
 */
 -- AlterTable
-ALTER TABLE "ReconRule" ADD COLUMN     "merchant_id" VARCHAR(255) NOT NULL;
+-- Step 1: Add the column as nullable
+ALTER TABLE "ReconRule" ADD COLUMN     "merchant_id" VARCHAR(255);
 
+-- Step 2: Backfill the column with default values (e.g., a placeholder or derived value)
+UPDATE "ReconRule" SET "merchant_id" = '<default_value>' WHERE "merchant_id" IS NULL;
+
+-- Step 3: Alter the column to make it NOT NULL
+ALTER TABLE "ReconRule" ALTER COLUMN "merchant_id" SET NOT NULL;
 -- CreateIndex
 CREATE INDEX "ReconRule_merchant_id_idx" ON "ReconRule"("merchant_id");
 
