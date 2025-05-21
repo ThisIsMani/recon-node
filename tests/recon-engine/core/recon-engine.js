@@ -110,10 +110,14 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       effective_date: new Date('2025-06-01T00:00:00.000Z'),
       metadata: { payment_ref: 'pay-abc' },
     };
-    prisma.entry.findMany.mockResolvedValue([]); // Default to no match
+    prisma.entry.findMany.mockResolvedValue([]); 
     prisma.stagingEntry.update.mockResolvedValue({});
     transactionCore.createTransactionInternal.mockResolvedValue({ transaction_id: 'new_txn_id', entries: [] });
-     // Reset $transaction mock to ensure it provides the nested mocks for each call
+    
+    // Default ReconRule mock for tests that might need it implicitly
+    // Specific tests can override this or set up their own.
+    prisma.reconRule.findFirst.mockResolvedValue(null); // Default to no rule found
+
     prisma.$transaction.mockImplementation(async (callback) => {
       const mockTx = {
         transaction: { update: jest.fn().mockResolvedValue({}) },
@@ -124,7 +128,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
     });
   });
 
-  test('should handle "No Match Found" by setting status to NEEDS_MANUAL_REVIEW and throwing NoMatchFoundError', async () => {
+  test('should handle "No Match Found" (due to no ReconRule) by setting status to NEEDS_MANUAL_REVIEW and throwing NoMatchFoundError', async () => {
     const expectedErrorMessage = `No matching expected entry found for staging_entry_id ${mockStagingEntry.staging_entry_id}. Staging entry requires manual review.`;
     await expect(processStagingEntryWithRecon(mockStagingEntry, merchantId))
       .rejects
@@ -142,6 +146,14 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
 
   test('should handle BalanceError from createTransactionInternal during fulfillment, update staging entry (no discard), and re-throw', async () => {
     const orderId = 'order_balance_error_fulfill';
+    // Setup ReconRule: mockStagingEntry.account_id is account_two_id (expecting account)
+    prisma.reconRule.findFirst.mockResolvedValueOnce({
+      id: 'rule-for-balance-error',
+      merchant_id: merchantId,
+      account_one_id: 'some-other-account',
+      account_two_id: mockStagingEntry.account_id, 
+    });
+
     const mockOriginalTransaction = {
       transaction_id: 'orig_txn_balance_error',
       logical_transaction_id: `ltid_${orderId}`,
@@ -149,8 +161,8 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       merchant_id: merchantId,
       status: TransactionStatus.EXPECTED,
       entries: [
-        { entry_id: 'orig_entry_posted', account_id: 'account-other', entry_type: EntryType.DEBIT, amount: new Decimal('200.00'), currency: 'EUR', status: EntryStatus.POSTED, metadata: { order_id: orderId } },
-        { entry_id: 'orig_entry_expected', account_id: mockStagingEntry.account_id, entry_type: mockStagingEntry.entry_type, amount: new Decimal('200.00'), currency: mockStagingEntry.currency, status: EntryStatus.EXPECTED, metadata: { order_id: orderId } },
+        { entry_id: 'orig_entry_posted', account_id: 'some-other-account', entry_type: EntryType.DEBIT, amount: new Decimal('200.00'), currency: 'EUR', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderId } },
+        { entry_id: 'orig_entry_expected', account_id: mockStagingEntry.account_id, entry_type: mockStagingEntry.entry_type, amount: new Decimal('200.00'), currency: mockStagingEntry.currency, status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderId } },
       ],
     };
     prisma.entry.findMany.mockResolvedValueOnce([{ ...mockOriginalTransaction.entries[1], transaction: mockOriginalTransaction }]);
@@ -175,6 +187,14 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
   
   test('should handle generic error from createTransactionInternal during fulfillment, update staging entry (no discard), and re-throw', async () => {
     const orderId = 'order_generic_error_fulfill';
+    // Setup ReconRule: mockStagingEntry.account_id is account_two_id
+    prisma.reconRule.findFirst.mockResolvedValueOnce({
+      id: 'rule-for-generic-error',
+      merchant_id: merchantId,
+      account_one_id: 'some-other-account-g',
+      account_two_id: mockStagingEntry.account_id,
+    });
+
     const mockOriginalTransaction = {
       transaction_id: 'orig_txn_generic_error',
       logical_transaction_id: `ltid_${orderId}`,
@@ -182,8 +202,8 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       merchant_id: merchantId,
       status: TransactionStatus.EXPECTED,
       entries: [
-        { entry_id: 'orig_entry_posted_g', account_id: 'account-other', entry_type: EntryType.DEBIT, amount: new Decimal('200.00'), currency: 'EUR', status: EntryStatus.POSTED, metadata: { order_id: orderId } },
-        { entry_id: 'orig_entry_expected_g', account_id: mockStagingEntry.account_id, entry_type: mockStagingEntry.entry_type, amount: new Decimal('200.00'), currency: mockStagingEntry.currency, status: EntryStatus.EXPECTED, metadata: { order_id: orderId } },
+        { entry_id: 'orig_entry_posted_g', account_id: 'some-other-account-g', entry_type: EntryType.DEBIT, amount: new Decimal('200.00'), currency: 'EUR', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderId } },
+        { entry_id: 'orig_entry_expected_g', account_id: mockStagingEntry.account_id, entry_type: mockStagingEntry.entry_type, amount: new Decimal('200.00'), currency: mockStagingEntry.currency, status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderId } },
       ],
     };
     prisma.entry.findMany.mockResolvedValueOnce([{ ...mockOriginalTransaction.entries[1], transaction: mockOriginalTransaction }]);
@@ -219,6 +239,14 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
     const originalTxId = 'orig_txn_meta';
     const expectedEntryId = 'orig_expected_entry_meta';
 
+    // Setup ReconRule: mockStagingEntry.account_id is account_two_id
+    prisma.reconRule.findFirst.mockResolvedValueOnce({
+      id: 'rule-for-metadata-test',
+      merchant_id: merchantId,
+      account_one_id: 'some-other-account-m',
+      account_two_id: mockStagingEntry.account_id,
+    });
+
     const mockOriginalTransaction = {
       transaction_id: originalTxId,
       logical_transaction_id: `ltid_${orderId}`,
@@ -226,8 +254,8 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       merchant_id: merchantId,
       status: TransactionStatus.EXPECTED,
       entries: [
-        { entry_id: 'orig_posted_meta', account_id: 'account-other', entry_type: EntryType.DEBIT, amount: new Decimal('200.00'), currency: 'EUR', status: EntryStatus.POSTED, metadata: { order_id: orderId, original_note: "posted leg" } },
-        { entry_id: expectedEntryId, account_id: mockStagingEntry.account_id, entry_type: mockStagingEntry.entry_type, amount: new Decimal('200.00'), currency: mockStagingEntry.currency, status: EntryStatus.EXPECTED, metadata: { order_id: orderId, original_note: "expected leg" } },
+        { entry_id: 'orig_posted_meta', account_id: 'some-other-account-m', entry_type: EntryType.DEBIT, amount: new Decimal('200.00'), currency: 'EUR', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderId, original_note: "posted leg" } },
+        { entry_id: expectedEntryId, account_id: mockStagingEntry.account_id, entry_type: mockStagingEntry.entry_type, amount: new Decimal('200.00'), currency: mockStagingEntry.currency, status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderId, original_note: "expected leg" } },
       ],
     };
     prisma.entry.findMany.mockResolvedValueOnce([{ ...mockOriginalTransaction.entries[1], transaction: mockOriginalTransaction }]);

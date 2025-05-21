@@ -103,13 +103,18 @@ model ReconRule {
 
 **Purpose & Future Implications:**
 
-- These rules form the basis for the 'recon engine'
-- When an event occurs related to `account_one_id` (or `account_two_id`), and a `ReconRule` exists, the system might automatically generate an 'expected entry' for the corresponding `account_two_id` (or `account_one_id`) with matching `order_id`, `amount`, and `currency`
-- Rules are scoped to merchants, ensuring proper data isolation
+- These rules form the basis for the 'recon engine'.
+- **Implied Roles & Conditional Matching:**
+    - By convention, `account_one_id` is typically considered the "source" or "initiating" account in a transaction pair that generates an expectation.
+    - `account_two_id` is typically considered the "destination" or "expecting" account, where an `EXPECTED` entry would be lodged, awaiting fulfillment.
+    - The Recon Engine uses this convention: it will only attempt to match an incoming `StagingEntry` against existing `EXPECTED` entries if the `StagingEntry.account_id` corresponds to `account_two_id` in an active `ReconRule`. If the `StagingEntry.account_id` is `account_one_id`, or if no rule exists, a match attempt is bypassed, and the staging entry is typically flagged for manual review.
+- When an event occurs related to `account_one_id` (e.g., a payment processed), and a `ReconRule` exists, the system (historically, or in future designs for auto-expectation generation) might automatically generate an 'expected entry' for the corresponding `account_two_id` with matching `order_id`, `amount`, and `currency`.
+- Rules are scoped to merchants, ensuring proper data isolation.
 - The system can use these rules to:
-  - Track expected vs actual entries
-  - Identify reconciliation mismatches
-  - Automate reconciliation processes
+  - Conditionally attempt to match `StagingEntry` records with `EXPECTED` entries.
+  - Track expected vs actual entries.
+  - Identify reconciliation mismatches.
+  - Automate parts of the reconciliation process.
 
 **User Stories:**
 

@@ -101,25 +101,45 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
   }
 
   try {
-    // Phase 1: Attempt to Match and Fulfill Existing Expectation
     const orderId = stagingEntry.metadata?.order_id;
+    let attemptMatch = false;
+
+    // Fetch ReconRule to determine if we should attempt matching
+    const reconRule = await prisma.reconRule.findFirst({
+      where: {
+        merchant_id: merchantId,
+        OR: [
+          { account_one_id: stagingEntry.account_id },
+          { account_two_id: stagingEntry.account_id },
+        ],
+      },
+    });
+
+    if (reconRule && reconRule.account_two_id === stagingEntry.account_id) {
+      // Only attempt match if the staging entry's account is account_two_id in the rule
+      attemptMatch = true;
+      logger.info(`[ReconEngine] ReconRule found. StagingEntry account ${stagingEntry.account_id} is account_two_id. Attempting match for order_id: ${orderId}.`);
+    } else if (reconRule) {
+      logger.info(`[ReconEngine] ReconRule found, but StagingEntry account ${stagingEntry.account_id} is account_one_id. Skipping match attempt for order_id: ${orderId}.`);
+    } else {
+      logger.info(`[ReconEngine] No ReconRule found for StagingEntry account ${stagingEntry.account_id}. Skipping match attempt for order_id: ${orderId}.`);
+    }
+    
     let matchedExpectedEntry = null;
     let originalTransaction = null;
 
-    if (orderId) {
+    if (attemptMatch && orderId) {
       logger.info(`[ReconEngine] Attempting to match StagingEntry ID: ${stagingEntry.staging_entry_id} with Order ID: ${orderId} for Account ID: ${stagingEntry.account_id}`);
       const potentialMatches = await prisma.entry.findMany({
         where: {
-          account_id: stagingEntry.account_id,
+          account_id: stagingEntry.account_id, // This should be account_two_id from the rule
           status: EntryStatus.EXPECTED,
           transaction: {
             merchant_id: merchantId,
             status: { 
-              notIn: [TransactionStatus.ARCHIVED, TransactionStatus.MISMATCH], // Don't match with already archived or mismatched transactions
+              notIn: [TransactionStatus.ARCHIVED, TransactionStatus.MISMATCH],
             },
           },
-          // Assuming order_id is stored in metadata like: { "order_id": "someValue" }
-          // Adjust the path if it's nested differently.
           metadata: {
             path: ['order_id'],
             equals: orderId,
@@ -128,12 +148,12 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
         include: {
           transaction: {
             include: {
-              entries: true, // To get the other leg for validation
+              entries: true, 
             },
           },
         },
         orderBy: {
-          created_at: 'desc', // Get the latest one if multiple (though ideally order_id + account_id for EXPECTED should be unique).
+          created_at: 'desc', 
         },
       });
 
@@ -147,15 +167,14 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
           where: { staging_entry_id: stagingEntry.staging_entry_id },
           data: {
             status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
-            // discarded_at: new Date(), // Removed for NEEDS_MANUAL_REVIEW
             metadata: { ...stagingEntry.metadata, error: 'Ambiguous match: Multiple expected entries found.', error_type: 'AmbiguousMatchError' }
           },
         });
         throw new Error(`Ambiguous match for staging_entry_id ${stagingEntry.staging_entry_id}: Multiple expected entries found.`);
       } else {
-        logger.info(`[ReconEngine] No potential expected entry found for order_id ${orderId} and account_id ${stagingEntry.account_id}.`);
+        logger.info(`[ReconEngine] No potential expected entry found for order_id ${orderId} and account_id ${stagingEntry.account_id} (match was attempted).`);
       }
-    }
+    } // else if (!attemptMatch || !orderId), we fall through to the "no match found" logic below.
 
     if (matchedExpectedEntry && originalTransaction) {
       // Validation Phase

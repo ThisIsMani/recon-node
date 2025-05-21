@@ -12,8 +12,12 @@
         -   Throws `NoReconRuleFoundError` if a rule cannot be found.
     -   `async function processStagingEntryWithRecon(stagingEntry, merchantId)`:
         -   This is the main orchestrator function called by the consumer.
-        -   **Matching & Validation Logic (Phase 1 & 2):**
-            -   Attempts to find a unique, existing `EXPECTED` entry in a non-archived, non-mismatched transaction that matches the `stagingEntry`'s `account_id`, `merchantId`, and `metadata.order_id`.
+        -   **Conditional Matching Logic:**
+            -   First, fetches the `ReconRule` for the `stagingEntry.account_id` and `merchantId`.
+            -   A match against existing `EXPECTED` entries is **only attempted if** a `ReconRule` exists AND the `stagingEntry.account_id` is `reconRule.account_two_id`. This convention assumes `account_two_id` is the "destination" or "expecting" account.
+            -   If these conditions are not met (no rule, or `stagingEntry.account_id` is `reconRule.account_one_id`), the engine skips the matching attempt and proceeds as if no match was found (throws `NoMatchFoundError`, sets `StagingEntry` to `NEEDS_MANUAL_REVIEW`).
+        -   **Matching & Validation Logic (Phase 1 & 2 - if match attempt is warranted):**
+            -   If a match attempt is warranted and `stagingEntry.metadata.order_id` is present, it attempts to find a unique, existing `EXPECTED` entry.
             -   **If a unique match is found (`matchedExpectedEntry` and `originalTransaction`):**
                 -   Validates the `amount`, `currency`, and `entry_type` of the `stagingEntry` against the `matchedExpectedEntry`.
                 -   **If valid match (Phase 2 Fulfillment):**
@@ -56,7 +60,11 @@
 
 **Data Flow (within `processStagingEntryWithRecon` - Updated for Phase 2):**
 1.  Input: `StagingEntry` object, `merchantId`.
-2.  **Attempt to Match Existing Expected Entry:**
+2.  **Determine if Match Attempt is Warranted:**
+    -   Fetch `ReconRule` for `stagingEntry.account_id` and `merchantId`.
+    -   If (no `ReconRule` OR `stagingEntry.account_id` is not `reconRule.account_two_id` OR `stagingEntry.metadata.order_id` is null):
+        -   Skip to step 4 (No Match Found).
+3.  **Attempt to Match Existing Expected Entry (if warranted):**
     -   Query for `EXPECTED` entries based on `order_id`, `account_id`, `merchant_id`.
     -   If **unique match found**:
         -   Validate `amount`, `currency`, `entry_type`.
@@ -75,8 +83,8 @@
     -   If **multiple matches found**:
         -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW` (without `discarded_at`), with error details.
         -   Throw `Error("Ambiguous match...")`. (End of flow)
-    -   If **no match found**:
+    -   If **no match found (either from step 2 or step 3)**:
         -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW` (without `discarded_at`), with error details.
         -   Throw `NoMatchFoundError`. (End of flow - no new transaction generated automatically).
 
-This component is crucial for automating the creation of balanced, double-entry bookkeeping records. The matching and fulfillment logic aims to accurately evolve transactions when expected payments are realized, maintaining a clear audit trail. Unmatched entries are flagged for manual review.
+This component is crucial for automating the creation of balanced, double-entry bookkeeping records. The matching and fulfillment logic aims to accurately evolve transactions when expected payments are realized, maintaining a clear audit trail. Unmatched entries, or entries not designated for matching, are flagged for manual review.

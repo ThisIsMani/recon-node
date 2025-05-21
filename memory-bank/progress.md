@@ -2,6 +2,28 @@
 
 ---
 **Date:** 2025-05-21
+**Task:** Implement Conditional Expected Entry Matching in Recon Engine
+**Status:** Completed
+**Summary:**
+- Modified `src/server/core/recon-engine/engine.js`:
+    - The engine now first fetches the `ReconRule` for the `stagingEntry.account_id`.
+    - A match against existing `EXPECTED` entries is only attempted if a `ReconRule` exists AND `stagingEntry.account_id` is `reconRule.account_two_id`.
+    - If these conditions aren't met, the matching logic is bypassed, and the `StagingEntry` is set to `NEEDS_MANUAL_REVIEW` with a `NoMatchFoundError`.
+- Updated unit tests:
+    - `tests/recon-engine/core/recon-engine-matching.test.js`: Scenarios updated to include `ReconRule` setups that correctly trigger or bypass matching. New tests added for bypassed matching scenarios. Ensured `effective_date` is present in all test data for `Entry` creation.
+    - `tests/recon-engine/core/recon-engine.js`: `ReconRule` setup added to fulfillment error tests to ensure the matching path is taken before simulating errors.
+- All 152 tests are passing.
+- Updated Memory Bank documents: `memory-bank/entities/recon-engine.md`, `memory-bank/entities/recon-rules.md`, and `memory-bank/activeContext.md`.
+- This `progress.md` entry.
+**Issues/Notes:**
+    - Test failures occurred due to missing `effective_date` in `Entry` test data setup within `tests/recon-engine/core/recon-engine-matching.test.js`. Resolved by adding `effective_date: new Date()`.
+    - Fulfillment tests in `tests/recon-engine/core/recon-engine.js` were failing with `NoMatchFoundError` because they lacked `ReconRule` setup to enable the matching path. Resolved by adding appropriate `prisma.reconRule.findFirst.mockResolvedValueOnce(...)` in those tests.
+    - A `ReferenceError` for `orderId` (instead of `orderIdAmbiguous`) in `recon-engine-matching.test.js` was fixed.
+    - A file corruption issue with `recon-engine-matching.test.js` after a `write_to_file` operation was resolved by re-writing the correct full content.
+**Next Steps:** Refer to `activeContext.md` for broader project next steps.
+
+---
+**Date:** 2025-05-21
 **Task:** Update Entry Archival & Add PENDING Status to StagingEntry
 **Status:** Completed
 **Summary:**
@@ -531,47 +553,14 @@
     - Continue with Recon Engine development and testing.
 <environment_details>
 # VSCode Visible Files
-memory-bank/activeContext.md
-
-# VSCode Open Tabs
-src/server/core/staging-entry/index.js
-memory-bank/plans/2025-05-21-file-ingestion-api-path-refactor.md
-src/server/routes/staging-entry/index.js
+../../../../../396
+psp-data.csv
+src/server/core/recon-engine/engine.js
+src/server/core/recon-engine/engine.js
+tests/recon-engine/core/recon-engine-matching.test.js
+tests/recon-engine/core/recon-engine-matching.test.js
 tests/staging-entry/staging-entry.js
-memory-bank/plans/2025-05-21-file-ingestion-api.md
-memory-bank/plans/2025-05-19-accounts-api.md
-package.json
-src/server.js
-README.md
-memory-bank/plans/2025-05-21-discard-processed-staging-entries.md
-src/server/core/recon-engine/consumer.js
-.env.example
-.env.test
-memory-bank/techContext.md
-memory-bank/progress.md
-prisma/schema.prisma
-src/server/core/recon-engine/engine.js
-tests/recon-engine/core/recon-engine-matching.test.js
-tests/recon-engine/core/recon-engine.js
-memory-bank/entities/staging-entries.md
-memory-bank/entities/recon-engine.md
-memory-bank/activeContext.md
-
-# Current Time
-21/05/2025, 8:15:31 pm (Asia/Calcutta, UTC+5.5:00)
-
-# Context Window Usage
-980,856 / 1,048.576K tokens used (94%)
-
-# Current Mode
-ACT MODE
-</environment_details>
-<environment_details>
-# VSCode Visible Files
-../../../../../335
-.env.test
-memory-bank/activeContext.md
-memory-bank/activeContext.md
+tests/staging-entry/staging-entry.js
 memory-bank/progress.md
 
 # VSCode Open Tabs
@@ -588,22 +577,23 @@ src/server/core/recon-engine/consumer.js
 .env.example
 .env.test
 memory-bank/techContext.md
-tests/recon-engine/core/recon-engine.js
-memory-bank/entities/staging-entries.md
-memory-bank/entities/recon-engine.md
-memory-bank/activeContext.md
 prisma/schema.prisma
-src/server/core/recon-engine/engine.js
-tests/recon-engine/core/recon-engine-matching.test.js
 tests/staging-entry/staging-entry.js
 memory-bank/entities/entries.md
+memory-bank/entities/staging-entries.md
+memory-bank/activeContext.md
+src/server/core/recon-engine/engine.js
+tests/recon-engine/core/recon-engine-matching.test.js
+tests/recon-engine/core/recon-engine.js
+memory-bank/entities/recon-engine.md
+memory-bank/entities/recon-rules.md
 memory-bank/progress.md
 
 # Current Time
-21/05/2025, 8:31:30 pm (Asia/Calcutta, UTC+5.5:00)
+21/05/2025, 8:48:32 pm (Asia/Calcutta, UTC+5.5:00)
 
 # Context Window Usage
-458,082 / 1,048.576K tokens used (44%)
+338,623 / 1,048.576K tokens used (32%)
 
 # Current Mode
 ACT MODE
