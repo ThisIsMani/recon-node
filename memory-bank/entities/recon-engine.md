@@ -28,14 +28,14 @@
                             1.  One entry derived from the current `stagingEntry`.
                             2.  One entry derived from the original `POSTED` leg of the `originalTransaction`.
                         -   Calls `transactionCore.createTransactionInternal` to create the new evolved transaction and its entries.
-                        -   Updates the `stagingEntry.status` to `PROCESSED` and its metadata with `evolved_transaction_id` and `match_type: 'Phase2_Fulfilled'`.
+                        -   Updates the `stagingEntry.status` to `PROCESSED`, sets `stagingEntry.discarded_at` to the current timestamp, and updates its metadata with `evolved_transaction_id` and `match_type: 'Phase2_Fulfilled'`.
                     -   Returns the `newEvolvedTransaction`.
                 -   **If invalid match (mismatch):**
                     -   Atomically updates the `originalTransaction.status` to `MISMATCH`.
-                    -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW` with error details in metadata.
+                    -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW`, sets `stagingEntry.discarded_at`, and adds error details in metadata.
                     -   Throws an error (`Mismatch detected...`).
             -   **If multiple matches are found (ambiguous match):**
-                -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW` with error details.
+                -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW`, sets `stagingEntry.discarded_at`, and adds error details.
                 -   Throws an error (`Ambiguous match...`).
             -   **If no match is found:**
                 -   Proceeds to generate a new transaction (see "Generate New Transaction Logic").
@@ -43,11 +43,11 @@
             -   Calls `generateTransactionEntriesFromStaging` to get `actualEntryData` and `expectedEntryData`.
             -   Prepares `transactionShellData`.
             -   Calls `transactionCore.createTransactionInternal` to create the transaction and its entries atomically.
-            -   If successful, updates the `StagingEntry` status to `PROCESSED`.
+            -   If successful, updates the `StagingEntry` status to `PROCESSED` and sets `stagingEntry.discarded_at`.
             -   Returns the `newTransaction`.
         -   **Error Handling (General):**
-            -   If `NoReconRuleFoundError` or `BalanceError` occurs during new transaction generation, it updates the `StagingEntry` status to `NEEDS_MANUAL_REVIEW` and re-throws the error.
-            -   For other unexpected errors, it updates `StagingEntry` to `NEEDS_MANUAL_REVIEW` and re-throws the error.
+            -   If `NoReconRuleFoundError` or `BalanceError` occurs during new transaction generation, it updates the `StagingEntry` status to `NEEDS_MANUAL_REVIEW`, sets `stagingEntry.discarded_at`, and re-throws the error.
+            -   For other unexpected errors, it updates `StagingEntry` to `NEEDS_MANUAL_REVIEW`, sets `stagingEntry.discarded_at`, and re-throws the error.
 
 -   **`src/server/core/recon-engine/consumer.js`**:
     -   `async function processSingleTask()`:
@@ -70,24 +70,24 @@
                 -   Create new evolved transaction (status `POSTED`, version incremented, same `logical_transaction_id`) with two `POSTED` entries:
                     -   One from the current `stagingEntry`.
                     -   One from the other (posted) leg of the original transaction.
-                -   Update `StagingEntry` status to `PROCESSED`, add `evolved_transaction_id` and `match_type: 'Phase2_Fulfilled'` to metadata.
+                -   Update `StagingEntry` status to `PROCESSED`, set `discarded_at`, add `evolved_transaction_id` and `match_type: 'Phase2_Fulfilled'` to metadata.
             -   Return the new evolved transaction.
         -   If **invalid (mismatch)**:
             -   Update original `Transaction` status to `MISMATCH`.
-            -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW` with error details.
+            -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW`, set `discarded_at`, with error details.
             -   Throw `Error("Mismatch detected...")`. (End of flow)
     -   If **multiple matches found**:
-        -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW` with error details.
+        -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW`, set `discarded_at`, with error details.
         -   Throw `Error("Ambiguous match...")`. (End of flow)
     -   If **no match found**: Proceed to step 3.
 3.  **Generate New Transaction (if no match):**
     -   Call `generateTransactionEntriesFromStaging` to get `actualEntryData` and `expectedEntryData`.
-        -   If `NoReconRuleFoundError` is thrown: Update `StagingEntry`, re-throw.
+        -   If `NoReconRuleFoundError` is thrown: Update `StagingEntry` (including `discarded_at`), re-throw.
     -   Prepare `transactionShellData`.
     -   Call `transactionCore.createTransactionInternal`.
-        -   If `BalanceError` or other error is thrown: Update `StagingEntry`, re-throw.
+        -   If `BalanceError` or other error is thrown: Update `StagingEntry` (including `discarded_at`), re-throw.
 4.  If `createTransactionInternal` is successful:
-    -   Update `StagingEntry` status to `PROCESSED`.
+    -   Update `StagingEntry` status to `PROCESSED` and set `discarded_at`.
     -   Return the created transaction.
 
 This component is crucial for automating the creation of balanced, double-entry bookkeeping records. The matching and fulfillment logic aims to accurately evolve transactions when expected payments are realized, maintaining a clear audit trail.

@@ -53,6 +53,7 @@ enum EntryType {
 
 **Lifecycle & Purpose:**
 - Staging entries serve as an initial capture point for financial data that may require validation or manual intervention.
-- `NEEDS_MANUAL_REVIEW`: Default state, or set if automated processing encounters issues.
-- `PROCESSED`: Indicates the entry has been handled (e.g., transformed into a final ledger entry, matched, or otherwise actioned). If an entry is effectively discarded as part of processing (e.g. a correction is made elsewhere), `discarded_at` can be set.
+- When a `StagingEntry` is processed by the Recon Engine (either successfully leading to `PROCESSED` status, or encountering an issue leading to `NEEDS_MANUAL_REVIEW`), its `discarded_at` field is set to the current timestamp. This signifies that the entry has been actioned by the engine, regardless of the outcome.
+- `NEEDS_MANUAL_REVIEW`: Default state, or set if automated processing encounters issues (e.g., no matching recon rule, ambiguous match, data validation failure). `discarded_at` will be set.
+- `PROCESSED`: Indicates the entry has been successfully handled by the Recon Engine (e.g., a new transaction was generated, or an existing expectation was fulfilled). `discarded_at` will be set.
 - This entity is distinct from the final `Entry` model that will represent posted ledger movements.

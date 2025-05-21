@@ -244,7 +244,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
 
     expect(prisma.stagingEntry.update).toHaveBeenCalledWith({
       where: { staging_entry_id: mockStagingEntry.staging_entry_id },
-      data: { status: StagingEntryStatus.PROCESSED },
+      data: { status: StagingEntryStatus.PROCESSED, discarded_at: expect.any(Date) },
     });
     expect(result.transaction_id).toBe(mockTransactionId);
     // expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Successfully processed staging_entry_id: ${mockStagingEntry.staging_entry_id}`)); // Removed
@@ -263,6 +263,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       where: { staging_entry_id: mockStagingEntry.staging_entry_id },
       data: { 
         status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
+        discarded_at: expect.any(Date),
         metadata: { 
           ...mockStagingEntry.metadata, 
           error: `No reconciliation rule found for merchant ${merchantId} and account ${mockStagingEntry.account_id}`,
@@ -295,6 +296,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       where: { staging_entry_id: mockStagingEntry.staging_entry_id },
       data: { 
         status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
+        discarded_at: expect.any(Date),
         metadata: {
            ...mockStagingEntry.metadata, 
            error: balanceErrorMessage,
@@ -319,6 +321,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       where: { staging_entry_id: mockStagingEntry.staging_entry_id },
       data: { 
         status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
+        discarded_at: expect.any(Date),
         metadata: {
           ...mockStagingEntry.metadata, 
           error: genericErrorMessage,
@@ -342,6 +345,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       where: { staging_entry_id: mockStagingEntry.staging_entry_id },
       data: { 
         status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
+        discarded_at: expect.any(Date),
         metadata: {
           ...mockStagingEntry.metadata, 
           error: genericErrorMessage,

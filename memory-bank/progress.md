@@ -2,6 +2,44 @@
 
 ---
 **Date:** 2025-05-21
+**Task:** Set `discarded_at` for Processed Staging Entries
+**Status:** Completed
+**Summary:**
+- Modified `src/server/core/recon-engine/engine.js` to set the `discarded_at` field on `StagingEntry` records to the current timestamp whenever their status is updated to `PROCESSED` or `NEEDS_MANUAL_REVIEW` by the recon engine.
+- Updated unit tests in `tests/recon-engine/core/recon-engine-matching.test.js` and `tests/recon-engine/core/recon-engine.js` to include assertions for the `discarded_at` field.
+- All 158 project tests passed successfully after these changes.
+- Created a new plan file: `memory-bank/plans/2025-05-21-discard-processed-staging-entries.md`.
+- Updated Memory Bank entity documents (`memory-bank/entities/staging-entries.md` and `memory-bank/entities/recon-engine.md`) to reflect the new behavior.
+- Updated `memory-bank/activeContext.md` and this `progress.md` entry.
+- Committed and pushed all changes to the remote repository.
+**Issues/Notes:** None.
+**Next Steps:** Refer to `activeContext.md` for broader project next steps.
+
+---
+**Date:** 2025-05-21
+**Task:** Update README with consumer start instructions
+**Status:** Completed
+**Summary:**
+- Added a new section to `README.md` explaining how to start the Recon Engine consumer using `npm run start:consumer`.
+- Committed and pushed this change to the remote repository.
+- Updated `memory-bank/activeContext.md` and this `progress.md` entry.
+**Issues/Notes:** None.
+**Next Steps:** None for this specific task.
+
+---
+**Date:** 2025-05-21
+**Task:** Fix DATABASE_URL loading for main server
+**Status:** Completed
+**Summary:**
+- Added `require('dotenv').config();` to the top of `src/server.js` to ensure environment variables are loaded correctly when starting the main server.
+- This addresses issues where `DATABASE_URL` might not be found by Prisma or other modules.
+- Committed and pushed this change to the remote repository.
+- Updated `memory-bank/activeContext.md` and this `progress.md` entry.
+**Issues/Notes:** The `dotenv` configuration was missing from the main server entry point, which is crucial for loading `.env` file contents.
+**Next Steps:** The server should now load environment variables correctly.
+
+---
+**Date:** 2025-05-21
 **Task:** Add npm script for Recon Engine Consumer
 **Status:** Completed
 **Summary:**
@@ -435,37 +473,3 @@
 - **Next Steps:**
     - Address remaining low code coverage areas if deemed necessary (e.g., `src/app.js`, `src/config/swaggerDef.js`, `src/db_models/index.js`).
     - Continue with Recon Engine development and testing.
-
-</final_file_content>
-
-IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
-
-<environment_details>
-# VSCode Visible Files
-memory-bank/progress.md
-
-# VSCode Open Tabs
-.env.test
-prisma/schema.prisma
-.env
-memory-bank/plans/2025-05-20-phase1-staging-entry-matching.md
-memory-bank/activeContext.md
-tests/recon-engine/core/recon-engine.js
-memory-bank/plans/2025-05-20-phase2-transaction-evolution.md
-src/server/core/recon-engine/engine.js
-tests/recon-engine/core/recon-engine-matching.test.js
-src/server/core/transaction/index.js
-memory-bank/entities/recon-engine.md
-memory-bank/entities/transactions.md
-memory-bank/entities/entries.md
-memory-bank/progress.md
-
-# Current Time
-20/05/2025, 11:17:51 pm (Asia/Calcutta, UTC+5.5:00)
-
-# Context Window Usage
-1,002,788 / 1,048.576K tokens used (96%)
-
-# Current Mode
-ACT MODE
-</environment_details>

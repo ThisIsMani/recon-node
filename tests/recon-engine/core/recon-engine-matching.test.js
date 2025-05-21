@@ -156,6 +156,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     expect(updatedStagingEntry.metadata.matched_entry_id).toBe(expectedEntry.entry_id);
     expect(updatedStagingEntry.metadata.evolved_transaction_id).toBe(result.transaction_id);
     expect(updatedStagingEntry.metadata.match_type).toBe('Phase2_Fulfilled');
+    expect(updatedStagingEntry.discarded_at).not.toBeNull();
 
     // Verify original transaction is ARCHIVED
     const archivedTransaction = await prisma.transaction.findUnique({ where: { transaction_id: originalTransaction.transaction_id } });
@@ -216,6 +217,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     expect(updatedStagingEntry.status).toBe(StagingEntryStatus.NEEDS_MANUAL_REVIEW);
     expect(updatedStagingEntry.metadata.error_type).toBe('MismatchError');
     expect(updatedStagingEntry.metadata.matched_transaction_id).toBe(originalTransaction.transaction_id);
+    expect(updatedStagingEntry.discarded_at).not.toBeNull();
 
     const updatedOriginalTransaction = await prisma.transaction.findUnique({ where: { transaction_id: originalTransaction.transaction_id } });
     expect(updatedOriginalTransaction.status).toBe(TransactionStatus.MISMATCH);
@@ -254,6 +256,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     const updatedStagingEntry = await prisma.stagingEntry.findUnique({ where: { staging_entry_id: mismatchStagingEntry.staging_entry_id } });
     expect(updatedStagingEntry.status).toBe(StagingEntryStatus.NEEDS_MANUAL_REVIEW);
     expect(updatedStagingEntry.metadata.error_type).toBe('MismatchError');
+    expect(updatedStagingEntry.discarded_at).not.toBeNull();
 
     const updatedOriginalTransaction = await prisma.transaction.findUnique({ where: { transaction_id: originalTransaction.transaction_id } });
     expect(updatedOriginalTransaction.status).toBe(TransactionStatus.MISMATCH);
@@ -294,6 +297,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     const updatedStagingEntry = await prisma.stagingEntry.findUnique({ where: { staging_entry_id: mismatchStagingEntry.staging_entry_id } });
     expect(updatedStagingEntry.status).toBe(StagingEntryStatus.NEEDS_MANUAL_REVIEW);
     expect(updatedStagingEntry.metadata.error_type).toBe('MismatchError');
+    expect(updatedStagingEntry.discarded_at).not.toBeNull();
 
     const updatedOriginalTransaction = await prisma.transaction.findUnique({ where: { transaction_id: originalTransaction.transaction_id } });
     expect(updatedOriginalTransaction.status).toBe(TransactionStatus.MISMATCH);
@@ -323,6 +327,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     
     const updatedStagingEntry = await prisma.stagingEntry.findUnique({ where: { staging_entry_id: stagingEntry.staging_entry_id } });
     expect(updatedStagingEntry.status).toBe(StagingEntryStatus.PROCESSED);
+    expect(updatedStagingEntry.discarded_at).not.toBeNull();
     // Ensure no match metadata is present
     expect(updatedStagingEntry.metadata.matched_transaction_id).toBeUndefined();
     expect(updatedStagingEntry.metadata.matched_entry_id).toBeUndefined();
@@ -393,6 +398,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     const updatedStagingEntry = await prisma.stagingEntry.findUnique({ where: { staging_entry_id: fulfillingStagingEntry.staging_entry_id } });
     expect(updatedStagingEntry.status).toBe(StagingEntryStatus.NEEDS_MANUAL_REVIEW);
     expect(updatedStagingEntry.metadata.error_type).toBe('AmbiguousMatchError');
+    expect(updatedStagingEntry.discarded_at).not.toBeNull();
   });
 
 });

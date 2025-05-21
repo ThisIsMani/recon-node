@@ -1,38 +1,29 @@
 # Active Context: Smart Ledger Backend (Node.js) - Recon Engine Phase 2 Complete
 
 **Current Focus:**
-- CSV File Ingestion API for `StagingEntry` creation is complete, with path refactored to `/api/accounts/:account_id/staging-entries/files`.
-- All related unit tests (including full project test suite) are passing.
-- Memory Bank documentation for this feature is updated with the new path.
+- Recon Engine now sets `discarded_at` for `StagingEntry` records when they are processed (status `PROCESSED` or `NEEDS_MANUAL_REVIEW`).
+- All related unit tests (158 total) are passing.
+- Memory Bank documentation for `StagingEntry` and `Recon Engine` entities updated.
+- Changes committed and pushed.
 
-**Key Decisions & Changes (File Ingestion API Summary):**
-1.  **API Endpoint Refactored:** Original `POST /api/accounts/:account_id/staging-entries/ingest-file` changed to `POST /api/accounts/:account_id/staging-entries/files`.
-    *   Accepts `multipart/form-data` with a CSV file.
-    *   Parses CSV, validates rows, and transforms data to `StagingEntry` format.
-    *   Determines `EntryType` (DEBIT/CREDIT) based on `Account.account_type` and CSV "type" field ("Payment"/"Refund").
-    *   Calls existing `stagingEntryCore.createStagingEntry` for each valid row, which also triggers `ProcessTracker` tasks for the Recon Engine.
-    *   Returns a 200 or 207 (Multi-Status) response with a summary of successful and failed ingestions.
-2.  **Dependencies:** `multer` and `csv-parser` added for file handling and CSV parsing.
-3.  **Core Logic (`src/server/core/staging-entry/index.js`):**
-    *   New function `ingestStagingEntriesFromFile(accountId, file)` added to handle the ingestion logic.
-    *   Includes fetching account details, CSV parsing via streams, row-level validation, data transformation, and calling `createStagingEntry`.
-4.  **Route Handler (`src/server/routes/staging-entry/index.js`):**
-    *   Uses `multer` middleware for file upload.
-    *   Handles request validation (file presence) and calls the core logic.
-    *   Manages response status codes (200, 207, 400, 404, 500) based on outcomes.
-5.  **Unit Tests (`tests/staging-entry/staging-entry.js`):**
-    *   Test suite updated for the `/files` endpoint, covering valid CSVs, mixed CSVs, invalid CSVs, file type errors, missing files, and non-existent accounts.
-    *   All 158 project tests pass.
-6.  **API Documentation:** Swagger JSDoc comments updated for the new `/files` endpoint path.
+**Key Decisions & Changes (StagingEntry Discard Logic):**
+1.  **Recon Engine Modification (`src/server/core/recon-engine/engine.js`):**
+    *   The `processStagingEntryWithRecon` function was updated.
+    *   In all instances where `StagingEntry.status` is set to `PROCESSED` or `NEEDS_MANUAL_REVIEW`, the `discarded_at` field is now also set to `new Date()`.
+2.  **Unit Tests Updated:**
+    *   `tests/recon-engine/core/recon-engine-matching.test.js`: Assertions added/updated to verify `stagingEntry.discarded_at` is populated after processing in various scenarios (successful match, mismatch, no match, ambiguous match).
+    *   `tests/recon-engine/core/recon-engine.js`: Assertions updated in mocked calls to `prisma.stagingEntry.update` to expect `discarded_at: expect.any(Date)`.
+3.  **Memory Bank Updates:**
+    *   `memory-bank/plans/2025-05-21-discard-processed-staging-entries.md`: New plan file created for this task.
+    *   `memory-bank/entities/staging-entries.md`: Lifecycle section updated to reflect `discarded_at` behavior.
+    *   `memory-bank/entities/recon-engine.md`: Logic description updated to include setting `discarded_at`.
+    *   `memory-bank/progress.md` (Will be updated to log completion of this task).
+    *   This `activeContext.md` file.
 
-**Memory Bank Updates:**
--   `memory-bank/plans/2025-05-21-file-ingestion-api.md` (Original plan updated with new path).
--   `memory-bank/plans/2025-05-21-file-ingestion-api-path-refactor.md` (Plan for this refactor).
--   `memory-bank/entities/staging-entries.md` (Updated with new API endpoint path).
--   `memory-bank/progress.md` (Will be updated to log completion of this refactor).
--   This `activeContext.md` file.
+**Previous Context (File Ingestion API - Still Relevant):**
+- CSV File Ingestion API for `StagingEntry` creation is complete, path: `POST /api/accounts/:account_id/staging-entries/files`.
 
-**Next Steps (Broader - carried over from previous context, still relevant):**
+**Next Steps (Broader - carried over, still relevant):**
 -   Consider more complex matching rules for the Recon Engine.
 -   Implement logic for partial matching/fulfillment.
 -   Explore N-way reconciliation scenarios.
@@ -40,5 +31,7 @@
 -   Develop a User Interface for managing `NEEDS_MANUAL_REVIEW` items and visualizing reconciliation.
 -   Address any remaining low code coverage areas if deemed necessary.
 -   Added `start:consumer` script to `package.json` for easier execution of the Recon Engine consumer.
+-   Ensured `dotenv` is initialized at the top of `src/server.js` to correctly load environment variables for the main server.
+-   Updated `README.md` with instructions on how to run the Recon Engine consumer.
 
 The CSV file ingestion API for creating Staging Entries is now implemented, tested, and refactored to use the `/files` path. This provides a bulk data entry mechanism that integrates with the existing Recon Engine pipeline.

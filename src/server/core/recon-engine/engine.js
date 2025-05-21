@@ -147,6 +147,7 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
           where: { staging_entry_id: stagingEntry.staging_entry_id },
           data: {
             status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
+            discarded_at: new Date(),
             metadata: { ...stagingEntry.metadata, error: 'Ambiguous match: Multiple expected entries found.', error_type: 'AmbiguousMatchError' }
           },
         });
@@ -274,6 +275,7 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
             where: { staging_entry_id: stagingEntry.staging_entry_id },
             data: {
               status: StagingEntryStatus.PROCESSED,
+              discarded_at: new Date(),
               metadata: {
                 ...stagingEntry.metadata, // Keep original staging metadata
                 matched_transaction_id: originalTransaction.transaction_id, // Record the transaction it matched
@@ -300,6 +302,7 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
             where: { staging_entry_id: stagingEntry.staging_entry_id },
             data: { 
               status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
+              discarded_at: new Date(),
               metadata: { ...stagingEntry.metadata, error: mismatchReason, error_type: 'MismatchError', matched_transaction_id: originalTransaction.transaction_id }
             },
           });
@@ -330,7 +333,7 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
       // If successful, update StagingEntry status to PROCESSED
       await prisma.stagingEntry.update({
         where: { staging_entry_id: stagingEntry.staging_entry_id },
-        data: { status: StagingEntryStatus.PROCESSED },
+        data: { status: StagingEntryStatus.PROCESSED, discarded_at: new Date() },
       });
 
       logger.log(`Successfully processed staging_entry_id: ${stagingEntry.staging_entry_id}. New transaction created: ${newTransaction.transaction_id}`);
@@ -347,7 +350,7 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
       try {
         await prisma.stagingEntry.update({
           where: { staging_entry_id: stagingEntry.staging_entry_id },
-          data: { status: StagingEntryStatus.NEEDS_MANUAL_REVIEW, metadata: { ...currentMetadata, error: error.message, error_type: error.name } },
+          data: { status: StagingEntryStatus.NEEDS_MANUAL_REVIEW, discarded_at: new Date(), metadata: { ...currentMetadata, error: error.message, error_type: error.name } },
         });
         logger.log(`StagingEntry ${stagingEntry.staging_entry_id} marked as NEEDS_MANUAL_REVIEW due to ${error.name}.`);
       } catch (updateError) {
@@ -361,7 +364,7 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
       try {
         await prisma.stagingEntry.update({
           where: { staging_entry_id: stagingEntry.staging_entry_id },
-          data: { status: StagingEntryStatus.NEEDS_MANUAL_REVIEW, metadata: { ...currentMetadata, error: error.message, error_type: error.name || 'GenericError' } },
+          data: { status: StagingEntryStatus.NEEDS_MANUAL_REVIEW, discarded_at: new Date(), metadata: { ...currentMetadata, error: error.message, error_type: error.name || 'GenericError' } },
         });
         logger.log(`StagingEntry ${stagingEntry.staging_entry_id} marked as NEEDS_MANUAL_REVIEW due to a generic error.`);
       } catch (updateError) {
