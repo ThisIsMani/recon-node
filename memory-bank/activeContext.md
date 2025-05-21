@@ -1,33 +1,40 @@
-# Active Context: Smart Ledger Backend (Node.js) - Logger Service Implementation
+# Active Context: Smart Ledger Backend (Node.js) - Recon Engine Phase 2 Complete
 
 **Current Focus:**
-- Refactoring logging to use a centralized logger service for cleaner code and test outputs.
+- Phase 2 of the Recon Engine (Transaction Evolution: Archival & Fulfillment) is complete.
+- All related unit tests (including full project test suite) are passing.
+- Memory Bank documentation for this phase is updated.
 
-**Key Decisions & Changes (Logger Service Refactor):**
-1.  **Logger Service Creation (`src/services/logger.js`):**
-    *   Created a new `logger.js` service.
-    *   It provides `log`, `error`, `warn`, `info`, `debug` methods that wrap the native `console` methods.
-    *   Logging is conditional: output is suppressed if `process.env.NODE_ENV === 'test'`.
-
-2.  **Refactoring Core Modules:**
-    *   `src/server/core/recon-engine/engine.js`: Updated to import and use the new `logger` service instead of direct `console.log`/`console.error`. Removed previous `process.env.NODE_ENV` checks for logging.
-    *   `src/server/core/recon-engine/consumer.js`: Updated to import and use the new `logger` service. Removed previous `process.env.NODE_ENV` checks for logging.
-
-3.  **Unit Test Updates:**
-    *   `tests/recon-engine/core/engine.test.js`: Removed `jest.spyOn(console, ...)` and related assertions for `console.log` and `console.error` as the logger service now handles conditional logging.
-    *   `tests/recon-engine/core/consumer.js`: Removed `jest.spyOn(console, ...)` and related assertions.
-    *   All tests (126 total) are passing with a clean console output.
+**Key Decisions & Changes (Recon Engine - Phase 2 Summary):**
+1.  **Recon Engine Logic (`src/server/core/recon-engine/engine.js` - `processStagingEntryWithRecon`):**
+    *   When a valid match between a `StagingEntry` and an `EXPECTED Entry` occurs:
+        *   The `originalTransaction` is archived (status `ARCHIVED`, `discarded_at` set).
+        *   A new, evolved `Transaction` is created (status `POSTED`, `logical_transaction_id` maintained, `version` incremented).
+        *   The new transaction contains two `POSTED` entries: one from the fulfilling `StagingEntry`, and one carried over from the original transaction's `POSTED` leg.
+        *   The `StagingEntry` is marked `PROCESSED` with metadata linking to the new `evolved_transaction_id` and `match_type: 'Phase2_Fulfilled'`.
+        *   These operations are performed atomically using `prisma.$transaction`.
+2.  **Transaction Core Logic (`src/server/core/transaction/index.js` - `createTransactionInternal`):**
+    *   Refactored to correctly handle being called from within an existing Prisma transaction. If a `callingTx` client is provided, it's used directly for database operations; otherwise, a new `prisma.$transaction` is initiated.
+    *   Corrected `Decimal` amount comparison to use `comparedTo()` instead of `!==`.
+3.  **Unit Tests (`tests/recon-engine/core/recon-engine-matching.test.js`):**
+    *   "Scenario 1" updated to test the full Phase 2 fulfillment flow.
+    *   All 6 tests in this suite pass.
+    *   All 16 test suites (152 tests) in the project pass.
 
 **Memory Bank Updates:**
--   Created `memory-bank/plans/2025-05-20-logger-service-refactor.md`.
--   Updated `memory-bank/systemPatterns.md` to include the new logger service pattern.
+-   `memory-bank/plans/2025-05-20-phase2-transaction-evolution.md` (Plan for this phase).
+-   `memory-bank/entities/recon-engine.md` (Updated with Phase 2 logic).
+-   `memory-bank/entities/transactions.md` (Updated with evolution details).
+-   `memory-bank/entities/entries.md` (Updated with fulfillment lifecycle).
+-   `memory-bank/progress.md` (Logged completion of Phase 2).
 -   This `activeContext.md` file.
 
-**Next Steps (Immediate for this task):**
-1.  Update `memory-bank/progress.md` to log the completion of the Recon Engine Consumer update and the subsequent logger refactoring.
-2.  Present the completion of the overall task (Recon Engine Consumer update including logger refactor) to the user.
+**Next Steps (Broader):**
+-   Consider more complex matching rules for the Recon Engine.
+-   Implement logic for partial matching/fulfillment.
+-   Explore N-way reconciliation scenarios.
+-   Performance optimization for large datasets.
+-   Develop a User Interface for managing `NEEDS_MANUAL_REVIEW` items and visualizing reconciliation.
+-   Address any remaining low code coverage areas if deemed necessary.
 
-**Broader Next Steps (Post this task):**
--   Consider refactoring other parts of the application to use the new logger service for consistency.
--   Continue with any further planned enhancements for the Recon Engine or related modules.
--   Address remaining low code coverage areas if deemed necessary.
+The core functionality for matching staging entries to expected payments and evolving the transactions accordingly is now implemented and tested.

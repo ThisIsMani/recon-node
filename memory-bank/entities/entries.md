@@ -1,7 +1,7 @@
 # Entity: Entries
 
 **Overview:**
-Entries represent final, posted financial movements within the Smart Ledger system. They are the core records that affect account balances and reflect confirmed transactions. Unlike Staging Entries, Entries are not typically created directly via an API but are the result of processing other data (e.g., Staging Entries, system-generated events).
+Entries represent final, posted financial movements within the Smart Ledger system. They are the core records that affect account balances and reflect confirmed transactions. Entries are typically created as part of a `Transaction` by internal system processes, such as the Recon Engine.
 
 **Prisma Schema Definition (`Entry` model from `prisma/schema.prisma`):**
 ```prisma
@@ -32,26 +32,39 @@ model Entry {
 
 **Metadata Details (`metadata` - JSON, Optional):**
 - A flexible JSONB field to store any additional, non-standardized information related to the entry.
-- Example: `{"payment_processor_id": "proc_123", "original_charge_id": "ch_abc"}`
-- For entries generated from `StagingEntry` objects via the Recon Engine, this may include:
-  - `order_id`: Propagated from `StagingEntry.metadata`.
-  - `source_staging_entry_id`: The ID of the `StagingEntry` that originated this entry.
-  - `recon_rule_id`: (For 'expected' entries) The ID of the `ReconRule` used to generate this entry.
+- **Commonly used metadata fields by the Recon Engine:**
+  - `order_id`: Propagated from `StagingEntry.metadata`, used for matching.
+  - `source_staging_entry_id`: The ID of the `StagingEntry` that originated this entry or the expectation.
+  - `recon_rule_id`: (For initial 'expected' entries) The ID of the `ReconRule` used to generate the expected entry.
+  - `fulfilled_expected_entry_id`: (For `POSTED` entries created from a `StagingEntry` that matched an `EXPECTED` entry) The ID of the `EXPECTED` entry that was fulfilled.
+  - `derived_from_entry_id`: (For `POSTED` entries in an evolved transaction that correspond to the original transaction's posted leg) The ID of the entry in the archived transaction from which this entry was derived.
+- Example: `{"order_id": "order-xyz", "source_staging_entry_id": "staging-abc", "fulfilled_expected_entry_id": "expected-entry-123"}`
 
 **API Endpoints:**
 - `GET /api/accounts/:account_id/entries`: List entries for the specified account. Supports filtering by `status` (e.g., `EXPECTED`, `POSTED`, `ARCHIVED`) via query parameters.
-  - **Note:** There is no `POST` endpoint for creating entries directly via the API. Entries are created through internal system processes, and now *must* be associated with a transaction.
+  - **Note:** There is no `POST` endpoint for creating entries directly via the API. Entries are created through internal system processes and *must* be associated with a transaction.
 
 **Core Logic (`src/server/core/entry/index.js`):**
 - `listEntries(account_id, queryParams)`: Retrieves entries for a given account, allowing filtering by status. Includes related account details.
-- `createEntryInternal(entryData, tx?)`: (Internal function) Creates a single entry. Accepts an optional Prisma transaction client (`tx`) to participate in an ongoing database transaction.
+- `createEntryInternal(entryData, tx?)`: (Internal function) Creates a single entry. Accepts an optional Prisma transaction client (`tx`) to participate in an ongoing database transaction. This is used by `transactionCore.createTransactionInternal`.
 
 **Lifecycle & Purpose:**
-- `EXPECTED`: Indicates an entry that is anticipated based on a rule or prior event but has not yet been confirmed by an actual corresponding event. The Recon Engine generates 'expected' entries.
-- `POSTED`: A confirmed financial movement that has impacted an account's balance. This is the primary active state for ledger entries.
-- `ARCHIVED`: An entry that is no longer active, typically because it has been corrected, superseded, or is part of a voided transaction. The `discarded_at` field should be populated for these entries.
+- `EXPECTED`:
+    - Indicates an entry that is anticipated based on a rule or prior event but has not yet been confirmed by an actual corresponding event.
+    - The Recon Engine generates 'expected' entries as part of an initial `POSTED` transaction (which has one `POSTED` leg and one `EXPECTED` leg).
+    - When a `StagingEntry` matches an `EXPECTED` entry, this `EXPECTED` entry does not directly change status. Instead, the transaction it belongs to is `ARCHIVED`, and a new, fully `POSTED` transaction is created. The `matchedExpectedEntry`'s data is used to create one of the new `POSTED` entries in the evolved transaction.
+- `POSTED`:
+    - A confirmed financial movement that has impacted an account's balance. This is the primary active state for ledger entries.
+    - Can be created initially from a `StagingEntry` (as one leg of a transaction that also has an `EXPECTED` leg).
+    - Can also be created as part of an "evolved" transaction when an `EXPECTED` entry is fulfilled by a `StagingEntry`. In this case, both entries in the new transaction version will be `POSTED`.
+- `ARCHIVED`:
+    - An entry that is no longer active, typically because it is part of an `ARCHIVED` transaction.
+    - This occurs when a transaction is superseded by a newer version (due to fulfillment of an expectation or a manual correction).
+    - The `discarded_at` field on the parent `Transaction` should be populated. Individual entries themselves might not have `discarded_at` directly, as their archival is tied to the transaction's archival. (Note: The schema has `discarded_at` on `Entry` but current logic archives at the `Transaction` level).
 
-**Future Considerations:**
-- The `Transaction` model groups related entries. An `Entry` must always belong to a `Transaction`.
-- Logic for calculating account balances will primarily use `POSTED` entries.
-- Internal processes are responsible for creating `Entry` records, ensuring they are linked to a `Transaction`. This typically happens when a `Transaction` is created (e.g., via `createTransactionInternal`) or when `StagingEntry` records are processed by the Recon Engine.
+**Relationship with Transactions:**
+- An `Entry` *must* always belong to exactly one `Transaction`.
+- The Recon Engine is responsible for creating transactions and their associated entries, ensuring that when an expected payment is matched:
+    1. The original transaction (containing the `EXPECTED` entry) is archived.
+    2. A new, evolved transaction is created with the same `logical_transaction_id` and an incremented `version`.
+    3. This new transaction contains two `POSTED` entries: one from the fulfilling `StagingEntry` and one carried over from the original transaction's `POSTED` leg.

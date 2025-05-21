@@ -2,6 +2,65 @@
 
 ---
 **Date:** 2025-05-20
+**Task:** Recon Engine - Phase 2: Transaction Evolution (Archival & Fulfillment)
+**Status:** Completed
+**Summary:**
+- Enhanced `src/server/core/recon-engine/engine.js` (`processStagingEntryWithRecon` function):
+    - When a valid match between a `StagingEntry` and an `EXPECTED Entry` occurs:
+        - The `originalTransaction` (containing the `EXPECTED Entry`) is now archived (status `ARCHIVED`, `discarded_at` set).
+        - A new, evolved `Transaction` is created with the same `logical_transaction_id` and an incremented `version`. This new transaction has a `POSTED` status.
+        - The new transaction includes two `POSTED` entries:
+            1. An entry derived from the fulfilling `StagingEntry`.
+            2. An entry derived from the original `POSTED` leg of the archived transaction.
+        - The `StagingEntry` is marked `PROCESSED`, and its metadata is updated with `evolved_transaction_id` and `match_type: 'Phase2_Fulfilled'`.
+        - All these operations are performed atomically within a `prisma.$transaction`.
+- Updated `src/server/core/transaction/index.js` (`createTransactionInternal` function):
+    - Modified to correctly handle being called within an existing Prisma transaction (passed as `callingTx`) by using the provided transaction client directly for database operations, instead of trying to start a new nested `$transaction`.
+- Updated unit tests in `tests/recon-engine/core/recon-engine-matching.test.js`:
+    - "Scenario 1" now tests the full Phase 2 fulfillment flow, including transaction archival and evolution.
+    - All tests in this suite (6 tests) are passing.
+    - All 16 test suites (152 tests) in the project are passing.
+- Updated Memory Bank: `memory-bank/entities/recon-engine.md`, `memory-bank/entities/transactions.md`, `memory-bank/entities/entries.md`, `memory-bank/plans/2025-05-20-phase2-transaction-evolution.md` (marked as complete), `activeContext.md`, and this progress log.
+**Issues/Notes:**
+    - Resolved a `BalanceError` in tests caused by `Decimal` comparison using `!==` instead of `comparedTo()`.
+    - Resolved a `TypeError` related to `prisma.$transaction` being called on a transaction client (`tx`) by refactoring `createTransactionInternal`.
+    - Resolved persistent `PrismaClientValidationError` for `account_type` in `recon-engine-matching.test.js` by ensuring correct enum usage (`AccountType.ASSET` -> `AccountType.DEBIT_NORMAL`, `AccountType.LIABILITY` -> `AccountType.CREDIT_NORMAL`) and using `write_to_file` to guarantee file state. The issue was finally resolved by correcting the `AccountType` enum values in the test setup.
+**Next Steps:** The core logic for matching and fulfilling expected payments is now implemented. Further enhancements could include more complex matching rules or UI for manual review.
+
+---
+**Date:** 2025-05-20
+**Task:** Recon Engine - Phase 1: Staging Entry Core Matching Logic & Mismatch State
+**Status:** Completed
+**Summary:**
+- Verified `TransactionStatus` enum in `prisma/schema.prisma` includes `MISMATCH`.
+- Ran `prisma generate` and `prisma migrate dev` to ensure schema and client are synchronized.
+- Enhanced `src/server/core/recon-engine/engine.js` (`processStagingEntryWithRecon` function):
+    - Implemented logic to find a potential `EXPECTED` entry based on `order_id`, `account_id`, and `merchant_id`.
+    - Added validation for `amount`, `currency`, and `entry_type` if a match is found.
+    - If a valid match:
+        - `StagingEntry` status updated to `PROCESSED`.
+        - Metadata updated with `matched_transaction_id`, `matched_entry_id`, `match_type: 'Phase1_Validated'`.
+        - Returns `{ status: 'MATCHED_PENDING_FULFILLMENT', ... }`.
+    - If a mismatch:
+        - Original `Transaction` status updated to `MISMATCH`.
+        - `StagingEntry` status updated to `NEEDS_MANUAL_REVIEW` with error details.
+        - Throws an error (`Mismatch detected...`).
+    - If multiple matches (ambiguous):
+        - `StagingEntry` status updated to `NEEDS_MANUAL_REVIEW`.
+        - Throws an error (`Ambiguous match...`).
+    - If no match: Falls back to generating a new transaction with `POSTED` and `EXPECTED` entries.
+- Created unit tests in `tests/recon-engine/core/recon-engine-matching.test.js` covering:
+    - Successful match and validation.
+    - Mismatches (amount, currency, entry type).
+    - No match found (fallback to new transaction).
+    - Ambiguous match (multiple expected entries).
+- All 6 tests in `recon-engine-matching.test.js` are now passing after resolving issues with module paths and enum usage in test setup.
+- Updated Memory Bank: `memory-bank/entities/recon-engine.md`, `memory-bank/plans/2025-05-20-phase1-staging-entry-matching.md` (marked as complete), `activeContext.md`, and this progress log.
+**Issues/Notes:** Encountered persistent test failures related to Prisma enum usage and module path resolution in Jest, which required multiple attempts and careful file writing to resolve.
+**Next Steps:** Proceed with Phase 2: Transaction Evolution (Archival and Fulfillment).
+
+---
+**Date:** 2025-05-20
 **Task:** Implement Logger Service and Refactor Console Usage
 **Status:** Completed
 **Summary:**
@@ -308,3 +367,37 @@
 - **Next Steps:**
     - Address remaining low code coverage areas if deemed necessary (e.g., `src/app.js`, `src/config/swaggerDef.js`, `src/db_models/index.js`).
     - Continue with Recon Engine development and testing.
+
+</final_file_content>
+
+IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
+
+<environment_details>
+# VSCode Visible Files
+memory-bank/progress.md
+
+# VSCode Open Tabs
+.env.test
+prisma/schema.prisma
+.env
+memory-bank/plans/2025-05-20-phase1-staging-entry-matching.md
+memory-bank/activeContext.md
+tests/recon-engine/core/recon-engine.js
+memory-bank/plans/2025-05-20-phase2-transaction-evolution.md
+src/server/core/recon-engine/engine.js
+tests/recon-engine/core/recon-engine-matching.test.js
+src/server/core/transaction/index.js
+memory-bank/entities/recon-engine.md
+memory-bank/entities/transactions.md
+memory-bank/entities/entries.md
+memory-bank/progress.md
+
+# Current Time
+20/05/2025, 11:17:51 pm (Asia/Calcutta, UTC+5.5:00)
+
+# Context Window Usage
+1,002,788 / 1,048.576K tokens used (96%)
+
+# Current Mode
+ACT MODE
+</environment_details>

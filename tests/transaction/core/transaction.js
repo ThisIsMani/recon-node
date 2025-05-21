@@ -3,6 +3,7 @@ const { createTransactionInternal, BalanceError } = require('../../../src/server
 const entryCore = require('../../../src/server/core/entry/index');
 const prisma = require('../../../src/services/prisma');
 const { TransactionStatus, EntryType, AccountType, EntryStatus: PrismaEntryStatus } = require('@prisma/client');
+const { Decimal } = require('@prisma/client/runtime/library'); // Import Decimal
 
 // Mock entryCore.createEntryInternal
 jest.mock('../../../src/server/core/entry/index', () => ({
@@ -50,7 +51,7 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
     actualEntryData = {
       account_id: 'account-actual',
       entry_type: EntryType.DEBIT,
-      amount: 100.00,
+      amount: new Decimal('100.00'), // Use Decimal
       currency: 'USD',
       status: PrismaEntryStatus.POSTED,
       effective_date: new Date().toISOString(),
@@ -59,7 +60,7 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
     expectedEntryData = {
       account_id: 'account-expected',
       entry_type: EntryType.CREDIT,
-      amount: 100.00,
+      amount: new Decimal('100.00'), // Use Decimal
       currency: 'USD',
       status: PrismaEntryStatus.EXPECTED,
       effective_date: new Date().toISOString(),
@@ -112,13 +113,13 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
   });
 
   it('should throw BalanceError if amounts do not match', async () => {
-    const unbalancedExpectedEntry = { ...expectedEntryData, amount: 99.00 };
+    const unbalancedExpectedEntry = { ...expectedEntryData, amount: new Decimal('99.00') }; // Use Decimal
     await expect(
       createTransactionInternal(transactionShellData, actualEntryData, unbalancedExpectedEntry)
     ).rejects.toThrow(BalanceError);
     await expect(
         createTransactionInternal(transactionShellData, actualEntryData, unbalancedExpectedEntry)
-      ).rejects.toThrow('Amounts do not balance: actual 100, expected 99');
+      ).rejects.toThrow('Amounts do not balance: actual 100, expected 99'); 
   });
 
   it('should throw BalanceError if currencies do not match', async () => {
@@ -249,13 +250,31 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
 
     // Check if the $transaction on the global prisma was NOT called
     expect(prisma.$transaction).not.toHaveBeenCalled();
-    // Check if the transaction create was called on the mockCallingTx (or its inner tx if it also uses $transaction)
-    // This depends on how createTransactionInternal uses callingTx.
-    // Based on current implementation: (callingTx || prisma).$transaction
-    // So, if callingTx is provided, callingTx.$transaction should be called.
-    expect(mockCallingTx.$transaction).toHaveBeenCalledTimes(1); 
-    // And the operations inside should use the tx provided by callingTx.$transaction (which we set up as mockTxClient)
-    expect(mockTxClient.transaction.create).toHaveBeenCalledWith({ data: transactionShellData });
+    
+    // Since callingTx is passed directly to executeInTransaction, 
+    // its methods (like transaction.create) should be called.
+    // The mockTxClient setup for callingTx is a bit convoluted here.
+    // Let's simplify: if callingTx is provided, its 'transaction.create' should be called.
+    // The mockCallingTx itself should have the 'transaction.create' mock.
+    
+    // Re-evaluating the mock setup for this specific test:
+    // mockCallingTx is passed as the prisma client instance to executeInTransaction.
+    // So, mockCallingTx.transaction.create should be called.
+    expect(mockCallingTx.transaction.create).toHaveBeenCalledWith({ 
+      data: {
+        ...transactionShellData
+      }
+    });
+    // And entryCore.createEntryInternal should be called with mockCallingTx as the prisma client
+    expect(entryCore.createEntryInternal).toHaveBeenCalledWith(
+      expect.objectContaining({ account_id: actualEntryData.account_id }),
+      mockCallingTx
+    );
+    expect(entryCore.createEntryInternal).toHaveBeenCalledWith(
+      expect.objectContaining({ account_id: expectedEntryData.account_id }),
+      mockCallingTx
+    );
+
   });
 
 });

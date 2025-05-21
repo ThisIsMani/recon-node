@@ -11,11 +11,28 @@ jest.mock('../../../src/services/prisma', () => ({
   reconRule: {
     findFirst: jest.fn(),
   },
-  stagingEntry: { // Add mock for stagingEntry updates
+  stagingEntry: { 
     update: jest.fn(),
   },
-  // Mock $transaction for createTransactionInternal if it's called directly by engine
-  // However, createTransactionInternal is mocked via transactionCore
+  entry: { // Added mock for prisma.entry
+    findMany: jest.fn(),
+  },
+  // Mock for $transaction to provide a mock transaction client to the callback
+  $transaction: jest.fn(async (callback) => {
+    // The callback expects a prisma client-like object (the transaction client 'tx')
+    // We can pass a simplified mock or even the original mocked prisma for nested calls if needed by the callback's logic
+    // For simplicity, let's pass an object that has the methods used within the transaction callback in engine.js
+    const mockTx = {
+      transaction: { // Assuming tx.transaction.update is used
+        update: jest.fn().mockResolvedValue({}),
+      },
+      stagingEntry: { // Assuming tx.stagingEntry.update is used
+        update: jest.fn().mockResolvedValue({}),
+      },
+      // Add other prisma client methods if they are used within the $transaction callback in engine.js
+    };
+    return callback(mockTx);
+  }),
 }));
 
 // Mock transactionCore
@@ -197,6 +214,9 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       ...mockStagingEntry,
       status: StagingEntryStatus.PROCESSED,
     });
+    // For tests in this suite that go through processStagingEntryWithRecon,
+    // assume no existing expected entries are found by default, unless overridden in a specific test.
+    prisma.entry.findMany.mockResolvedValue([]); 
   });
 
   afterEach(() => {

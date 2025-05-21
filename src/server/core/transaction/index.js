@@ -114,7 +114,7 @@ const createTransactionInternal = async (
   // Implement Balancing Check
   const { EntryType } = require('@prisma/client'); // Ensure EntryType is available
 
-  if (actualEntryData.amount !== expectedEntryData.amount) {
+  if (actualEntryData.amount.comparedTo(expectedEntryData.amount) !== 0) {
     throw new BalanceError(`Amounts do not balance: actual ${actualEntryData.amount}, expected ${expectedEntryData.amount}`);
   }
   if (actualEntryData.currency !== expectedEntryData.currency) {
@@ -127,9 +127,9 @@ const createTransactionInternal = async (
   
   // Atomic operations using Prisma interactive transactions
   try {
-    const result = await (callingTx || prisma).$transaction(async (tx) => {
+    const executeInTransaction = async (prismaClientInstance) => {
       // Create the transaction shell
-      const newTransaction = await tx.transaction.create({
+      const newTransaction = await prismaClientInstance.transaction.create({
         data: {
           merchant_id,
           status,
@@ -149,13 +149,20 @@ const createTransactionInternal = async (
         transaction_id: newTransaction.transaction_id,
       };
 
-      // Create entries using the refactored entryCore.createEntryInternal, passing the transaction client tx
-      const createdActualEntry = await entryCore.createEntryInternal(finalActualEntryData, tx);
-      const createdExpectedEntry = await entryCore.createEntryInternal(finalExpectedEntryData, tx);
+      // Create entries using the refactored entryCore.createEntryInternal, passing the transaction client
+      const createdActualEntry = await entryCore.createEntryInternal(finalActualEntryData, prismaClientInstance);
+      const createdExpectedEntry = await entryCore.createEntryInternal(finalExpectedEntryData, prismaClientInstance);
 
       return { ...newTransaction, entries: [createdActualEntry, createdExpectedEntry] };
-    });
-    return result;
+    };
+
+    if (callingTx) {
+      // Already in a transaction, use the provided transaction client directly
+      return await executeInTransaction(callingTx);
+    } else {
+      // Not in a transaction, start a new one
+      return await prisma.$transaction(executeInTransaction);
+    }
   } catch (error) {
     // Log the specific error for better debugging
     console.error(`Error during atomic transaction creation for merchant ${merchant_id}:`, error);
