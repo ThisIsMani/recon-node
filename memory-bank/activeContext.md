@@ -1,43 +1,43 @@
-# Active Context: Smart Ledger Backend (Node.js) - Recon Engine Phase 2 Complete
+# Active Context: Smart Ledger Backend (Node.js) - Account Name Update Feature
 
 **Current Focus:**
-- CSV File Ingestion API for `StagingEntry` creation is complete, with path refactored to `/api/accounts/:account_id/staging-entries/files`.
-- All related unit tests (including full project test suite) are passing.
-- Memory Bank documentation for this feature is updated with the new path.
+- Adding functionality to update an existing account's name.
 
-**Key Decisions & Changes (File Ingestion API Summary):**
-1.  **API Endpoint Refactored:** Original `POST /api/accounts/:account_id/staging-entries/ingest-file` changed to `POST /api/accounts/:account_id/staging-entries/files`.
-    *   Accepts `multipart/form-data` with a CSV file.
-    *   Parses CSV, validates rows, and transforms data to `StagingEntry` format.
-    *   Determines `EntryType` (DEBIT/CREDIT) based on `Account.account_type` and CSV "type" field ("Payment"/"Refund").
-    *   Calls existing `stagingEntryCore.createStagingEntry` for each valid row, which also triggers `ProcessTracker` tasks for the Recon Engine.
-    *   Returns a 200 or 207 (Multi-Status) response with a summary of successful and failed ingestions.
-2.  **Dependencies:** `multer` and `csv-parser` added for file handling and CSV parsing.
-3.  **Core Logic (`src/server/core/staging-entry/index.js`):**
-    *   New function `ingestStagingEntriesFromFile(accountId, file)` added to handle the ingestion logic.
-    *   Includes fetching account details, CSV parsing via streams, row-level validation, data transformation, and calling `createStagingEntry`.
-4.  **Route Handler (`src/server/routes/staging-entry/index.js`):**
-    *   Uses `multer` middleware for file upload.
-    *   Handles request validation (file presence) and calls the core logic.
-    *   Manages response status codes (200, 207, 400, 404, 500) based on outcomes.
-5.  **Unit Tests (`tests/staging-entry/staging-entry.js`):**
-    *   Test suite updated for the `/files` endpoint, covering valid CSVs, mixed CSVs, invalid CSVs, file type errors, missing files, and non-existent accounts.
-    *   All 158 project tests pass.
-6.  **API Documentation:** Swagger JSDoc comments updated for the new `/files` endpoint path.
+**Key Decisions & Changes (Account Name Update):**
+1.  **Core Logic Update (`src/server/core/account/index.js`):**
+    *   Added new async function `updateAccountName(merchantId, accountId, newAccountName)`.
+    *   This function verifies account existence and ownership.
+    *   It uses `prisma.account.update()` to change the `account_name`.
+    *   Includes error handling for cases like account not found, merchant mismatch, and Prisma errors.
+    *   The function is exported in `module.exports`.
+
+2.  **Route Definition Update (`src/server/routes/account/index.js`):**
+    *   Added a new `PUT /merchants/:merchant_id/accounts/:account_id` route.
+    *   The route handler calls `accountCore.updateAccountName`.
+    *   Includes input validation for `newAccountName` (must be a non-empty string).
+    *   Handles errors from the core logic and returns appropriate HTTP status codes (200, 400, 404, 500).
+
+3.  **Swagger Documentation Update (`src/server/routes/account/index.js`):**
+    *   Added Swagger JSDoc comments for the new `PUT` endpoint.
+    *   Defined a new schema `AccountNameUpdateInput` for the request body.
+    *   Ensured `AccountNameUpdateInput` is correctly placed within `components: schemas:`.
 
 **Memory Bank Updates:**
--   `memory-bank/plans/2025-05-21-file-ingestion-api.md` (Original plan updated with new path).
--   `memory-bank/plans/2025-05-21-file-ingestion-api-path-refactor.md` (Plan for this refactor).
--   `memory-bank/entities/staging-entries.md` (Updated with new API endpoint path).
--   `memory-bank/progress.md` (Will be updated to log completion of this refactor).
+-   Updated `memory-bank/entities/accounts.md` to include:
+    -   The new `PUT /api/merchants/:merchant_id/accounts/:account_id` endpoint.
+    -   Details of the `updateAccountName` function in the Core Logic section.
+    -   A new user story: "As a finance user, I want to be able to edit the name of an account."
 -   This `activeContext.md` file.
 
-**Next Steps (Broader - carried over from previous context, still relevant):**
--   Consider more complex matching rules for the Recon Engine.
--   Implement logic for partial matching/fulfillment.
--   Explore N-way reconciliation scenarios.
--   Performance optimization for large datasets (especially relevant for file ingestion).
--   Develop a User Interface for managing `NEEDS_MANUAL_REVIEW` items and visualizing reconciliation.
--   Address any remaining low code coverage areas if deemed necessary.
+**Next Steps (Immediate for this task):**
+1.  Update `memory-bank/progress.md` to log the completion of this "update account name" feature.
+2.  Present the completion of the task to the user.
 
-The CSV file ingestion API for creating Staging Entries is now implemented, tested, and refactored to use the `/files` path. This provides a bulk data entry mechanism that integrates with the existing Recon Engine pipeline.
+**Broader Next Steps (Post this task):**
+-   Implement TODOs:
+    -   Add validation for `accountData` in `createAccount` (`src/server/core/account/index.js`).
+    -   Add validation for `newAccountName` (length limits etc.) in `updateAccountName` (`src/server/core/account/index.js`).
+    -   Add input validation for `req.body` in `POST /` route (`src/server/routes/account/index.js`) using Joi or Zod.
+    -   Implement balance check before account deletion in `deleteAccount` (`src/server/core/account/index.js`).
+-   Write automated tests for the new "update account name" functionality.
+-   Consider refactoring other parts of the application to use the new logger service for consistency.

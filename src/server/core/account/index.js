@@ -135,8 +135,61 @@ async function deleteAccount(merchantId, accountId) {
   }
 }
 
+/**
+ * Updates the name of a specific account for a merchant.
+ * @param {string} merchantId - The ID of the merchant.
+ * @param {string} accountId - The ID of the account to update.
+ * @param {string} newAccountName - The new name for the account.
+ * @returns {Promise<object>} The updated account object, excluding created_at and updated_at.
+ */
+async function updateAccountName(merchantId, accountId, newAccountName) {
+  // TODO: Add validation for newAccountName (e.g., not empty, length limits)
+  try {
+    // First, verify the account exists and belongs to the merchant.
+    const account = await prisma.account.findUnique({
+      where: { account_id: accountId },
+    });
+
+    if (!account) {
+      throw new Error(`Account with ID ${accountId} not found.`);
+    }
+    if (account.merchant_id !== merchantId) {
+      throw new Error(`Account with ID ${accountId} does not belong to merchant ${merchantId}.`);
+    }
+
+    const updatedAccount = await prisma.account.update({
+      where: {
+        account_id: accountId,
+      },
+      data: {
+        account_name: newAccountName,
+      },
+      select: { // Explicitly select fields
+        account_id: true,
+        merchant_id: true,
+        account_name: true,
+        account_type: true,
+        currency: true,
+      }
+    });
+    return updatedAccount;
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.error('Error updating account name:', error);
+    }
+    if (error.message.startsWith('Account with ID')) throw error; // Re-throw custom errors
+    // Handle Prisma's specific error for record not found during update (though findUnique should catch it first)
+    if (error.code === 'P2025') {
+        throw new Error(`Account with ID ${accountId} not found for update.`);
+    }
+    // Handle other Prisma errors or generic errors
+    throw new Error('Could not update account name. Internal error: ' + error.message);
+  }
+}
+
 module.exports = {
   createAccount,
   listAccountsByMerchant,
   deleteAccount,
+  updateAccountName,
 };

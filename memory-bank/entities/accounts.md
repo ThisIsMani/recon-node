@@ -50,6 +50,13 @@ model Account {
     - `400 Bad Request`: If account has a non-zero balance (TODO: implement this check).
     - `404 Not Found`: If the account doesn't exist.
     - `500 Internal Server Error`: Server-side errors.
+- `PUT /api/merchants/:merchant_id/accounts/:account_id`: Update an account's name.
+  - Request Body: `{ "account_name": "string" }`
+  - Responses:
+    - `200 OK`: Account name updated successfully.
+    - `400 Bad Request`: Invalid input (e.g., missing `account_name`).
+    - `404 Not Found`: If the account or merchant doesn't exist, or account doesn't belong to merchant.
+    - `500 Internal Server Error`: Other server-side errors.
 
 **Core Logic (`src/server/core/account/index.js`):**
 - **`createAccount(data)`:**
@@ -62,11 +69,16 @@ model Account {
 - **`deleteAccount(accountId)`:**
   - Uses `prisma.account.delete({ where: { id: accountId } })`.
   - TODO: Add check for non-zero balance before deletion.
+- **`updateAccountName(merchantId, accountId, newAccountName)`:**
+  - Verifies account existence and ownership by the merchant.
+  - Uses `prisma.account.update()` to change the `account_name`.
+  - Handles Prisma errors.
 
 **User Stories (Specific to Accounts):**
 - As a finance user, I want to create different types of accounts (e.g., Revenue, Bank Account, PSP Holding) for a merchant to categorize funds.
 - As a finance user, I want to view all accounts associated with a specific merchant.
 - As a finance user, I want to delete an account if it's no longer needed and has a zero balance.
+- As a finance user, I want to be able to edit the name of an account.
 - As a finance user, I want to view the current balance of any account. (Balance calculation will be based on entries, this is a future feature).
 
 **Data Flow (Creating an Account):**
