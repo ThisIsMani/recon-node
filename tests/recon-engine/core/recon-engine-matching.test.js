@@ -88,20 +88,38 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
   });
 
   test('Scenario 1: Successful Match & Validation (Phase 1 behavior)', async () => {
-    // 1. Create an initial transaction with an EXPECTED entry
-    const initialStagingEntryData = {
-      account_id: account1.account_id,
-      entry_type: EntryType.DEBIT,
-      amount: new Decimal('100.00'),
-      currency: 'USD',
-      status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
-      effective_date: new Date(),
-      metadata: { order_id: 'order_123_success' },
-    };
-    const initialStagingEntry = await prisma.stagingEntry.create({ data: initialStagingEntryData });
-    
-    const originalTransaction = await processStagingEntryWithRecon(initialStagingEntry, merchant.merchant_id);
-    expect(originalTransaction.entries.some(e => e.status === EntryStatus.EXPECTED)).toBe(true);
+    // 1. Manually create an initial transaction with an EXPECTED entry
+    const orderIdSuccess = 'order_123_success_manual';
+    const originalTransaction = await prisma.transaction.create({
+      data: {
+        merchant_id: merchant.merchant_id,
+        status: TransactionStatus.EXPECTED, // Contains an expected entry
+        logical_transaction_id: `ltid_${orderIdSuccess}`,
+        entries: {
+          create: [
+            {
+              account_id: account1.account_id,
+              entry_type: EntryType.DEBIT,
+              amount: new Decimal('100.00'),
+              currency: 'USD',
+              status: EntryStatus.POSTED,
+              effective_date: new Date(),
+              metadata: { order_id: orderIdSuccess, note: "Initial posted leg" },
+            },
+            {
+              account_id: account2.account_id, // Account where we expect the fulfillment
+              entry_type: EntryType.CREDIT,    // Expected entry type
+              amount: new Decimal('100.00'),
+              currency: 'USD',
+              status: EntryStatus.EXPECTED,
+              effective_date: new Date(),
+              metadata: { order_id: orderIdSuccess, note: "Initial expected leg" },
+            },
+          ],
+        },
+      },
+      include: { entries: true },
+    });
     const expectedEntry = originalTransaction.entries.find(e => e.status === EntryStatus.EXPECTED && e.account_id === account2.account_id);
     expect(expectedEntry).toBeDefined();
 
@@ -113,7 +131,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
       currency: 'USD',
       status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
       effective_date: new Date(),
-      metadata: { order_id: 'order_123_success' },
+      metadata: { order_id: orderIdSuccess }, // Use the same orderId as the manually created transaction
     };
     const fulfillingStagingEntry = await prisma.stagingEntry.create({ data: fulfillingStagingEntryData });
 
@@ -184,20 +202,26 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
   });
 
   test('Scenario 2: Mismatch (Amount Differs)', async () => {
-    const initialStagingEntryData = {
-      account_id: account1.account_id,
-      entry_type: EntryType.DEBIT,
-      amount: new Decimal('100.00'),
-      currency: 'USD',
-      status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
-      effective_date: new Date(),
-      metadata: { order_id: 'order_mismatch_amount' },
-    };
-    const initialStagingEntry = await prisma.stagingEntry.create({ data: initialStagingEntryData });
-    const originalTransaction = await processStagingEntryWithRecon(initialStagingEntry, merchant.merchant_id);
+    // 1. Manually create an initial transaction with an EXPECTED entry
+    const orderIdMismatchAmount = 'order_mismatch_amount_manual';
+    const originalTransaction = await prisma.transaction.create({
+      data: {
+        merchant_id: merchant.merchant_id,
+        status: TransactionStatus.EXPECTED,
+        logical_transaction_id: `ltid_${orderIdMismatchAmount}`,
+        entries: {
+          create: [
+            { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderIdMismatchAmount } },
+            { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderIdMismatchAmount } },
+          ],
+        },
+      },
+      include: { entries: true },
+    });
     const expectedEntry = originalTransaction.entries.find(e => e.status === EntryStatus.EXPECTED && e.account_id === account2.account_id);
     expect(expectedEntry).toBeDefined();
 
+    // 2. Create a staging entry that mismatches this expected entry
     const mismatchStagingEntryData = {
       account_id: account2.account_id,
       entry_type: expectedEntry.entry_type,
@@ -205,7 +229,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
       currency: 'USD',
       status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
       effective_date: new Date(),
-      metadata: { order_id: 'order_mismatch_amount' },
+      metadata: { order_id: orderIdMismatchAmount },
     };
     const mismatchStagingEntry = await prisma.stagingEntry.create({ data: mismatchStagingEntryData });
 
@@ -217,27 +241,33 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     expect(updatedStagingEntry.status).toBe(StagingEntryStatus.NEEDS_MANUAL_REVIEW);
     expect(updatedStagingEntry.metadata.error_type).toBe('MismatchError');
     expect(updatedStagingEntry.metadata.matched_transaction_id).toBe(originalTransaction.transaction_id);
-    expect(updatedStagingEntry.discarded_at).not.toBeNull();
+    expect(updatedStagingEntry.discarded_at).toBeNull(); // Should not be discarded
 
     const updatedOriginalTransaction = await prisma.transaction.findUnique({ where: { transaction_id: originalTransaction.transaction_id } });
     expect(updatedOriginalTransaction.status).toBe(TransactionStatus.MISMATCH);
   });
   
   test('Scenario 2b: Mismatch (Currency Differs)', async () => {
-    const initialStagingEntryData = {
-      account_id: account1.account_id,
-      entry_type: EntryType.DEBIT,
-      amount: new Decimal('100.00'),
-      currency: 'USD',
-      status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
-      effective_date: new Date(),
-      metadata: { order_id: 'order_mismatch_currency' },
-    };
-    const initialStagingEntry = await prisma.stagingEntry.create({ data: initialStagingEntryData });
-    const originalTransaction = await processStagingEntryWithRecon(initialStagingEntry, merchant.merchant_id);
+    // 1. Manually create an initial transaction with an EXPECTED entry
+    const orderIdMismatchCurrency = 'order_mismatch_currency_manual';
+    const originalTransaction = await prisma.transaction.create({
+      data: {
+        merchant_id: merchant.merchant_id,
+        status: TransactionStatus.EXPECTED,
+        logical_transaction_id: `ltid_${orderIdMismatchCurrency}`,
+        entries: {
+          create: [
+            { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderIdMismatchCurrency } },
+            { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderIdMismatchCurrency } },
+          ],
+        },
+      },
+      include: { entries: true },
+    });
     const expectedEntry = originalTransaction.entries.find(e => e.status === EntryStatus.EXPECTED && e.account_id === account2.account_id);
     expect(expectedEntry).toBeDefined();
 
+    // 2. Create a staging entry that mismatches this expected entry
     const mismatchStagingEntryData = {
       account_id: account2.account_id,
       entry_type: expectedEntry.entry_type,
@@ -245,7 +275,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
       currency: 'EUR', // Different currency
       status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
       effective_date: new Date(),
-      metadata: { order_id: 'order_mismatch_currency' },
+      metadata: { order_id: orderIdMismatchCurrency },
     };
     const mismatchStagingEntry = await prisma.stagingEntry.create({ data: mismatchStagingEntryData });
 
@@ -256,29 +286,34 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     const updatedStagingEntry = await prisma.stagingEntry.findUnique({ where: { staging_entry_id: mismatchStagingEntry.staging_entry_id } });
     expect(updatedStagingEntry.status).toBe(StagingEntryStatus.NEEDS_MANUAL_REVIEW);
     expect(updatedStagingEntry.metadata.error_type).toBe('MismatchError');
-    expect(updatedStagingEntry.discarded_at).not.toBeNull();
+    expect(updatedStagingEntry.discarded_at).toBeNull(); // Should not be discarded
 
     const updatedOriginalTransaction = await prisma.transaction.findUnique({ where: { transaction_id: originalTransaction.transaction_id } });
     expect(updatedOriginalTransaction.status).toBe(TransactionStatus.MISMATCH);
   });
 
   test('Scenario 2c: Mismatch (Entry Type Differs)', async () => {
-    const initialStagingEntryData = {
-      account_id: account1.account_id,
-      entry_type: EntryType.DEBIT, // Results in EXPECTED CREDIT for account2
-      amount: new Decimal('100.00'),
-      currency: 'USD',
-      status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
-      effective_date: new Date(),
-      metadata: { order_id: 'order_mismatch_type' },
-    };
-    const initialStagingEntry = await prisma.stagingEntry.create({ data: initialStagingEntryData });
-    const originalTransaction = await processStagingEntryWithRecon(initialStagingEntry, merchant.merchant_id);
+    // 1. Manually create an initial transaction with an EXPECTED entry
+    const orderIdMismatchType = 'order_mismatch_type_manual';
+    const originalTransaction = await prisma.transaction.create({
+      data: {
+        merchant_id: merchant.merchant_id,
+        status: TransactionStatus.EXPECTED,
+        logical_transaction_id: `ltid_${orderIdMismatchType}`,
+        entries: {
+          create: [
+            { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderIdMismatchType } },
+            { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderIdMismatchType } },
+          ],
+        },
+      },
+      include: { entries: true },
+    });
     const expectedEntry = originalTransaction.entries.find(e => e.status === EntryStatus.EXPECTED && e.account_id === account2.account_id);
     expect(expectedEntry).toBeDefined();
     expect(expectedEntry.entry_type).toBe(EntryType.CREDIT);
 
-
+    // 2. Create a staging entry that mismatches this expected entry
     const mismatchStagingEntryData = {
       account_id: account2.account_id,
       entry_type: EntryType.DEBIT, // Should be CREDIT to match the expected entry
@@ -286,7 +321,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
       currency: 'USD',
       status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
       effective_date: new Date(),
-      metadata: { order_id: 'order_mismatch_type' },
+      metadata: { order_id: orderIdMismatchType },
     };
     const mismatchStagingEntry = await prisma.stagingEntry.create({ data: mismatchStagingEntryData });
 
@@ -297,13 +332,13 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     const updatedStagingEntry = await prisma.stagingEntry.findUnique({ where: { staging_entry_id: mismatchStagingEntry.staging_entry_id } });
     expect(updatedStagingEntry.status).toBe(StagingEntryStatus.NEEDS_MANUAL_REVIEW);
     expect(updatedStagingEntry.metadata.error_type).toBe('MismatchError');
-    expect(updatedStagingEntry.discarded_at).not.toBeNull();
+    expect(updatedStagingEntry.discarded_at).toBeNull(); // Should not be discarded
 
     const updatedOriginalTransaction = await prisma.transaction.findUnique({ where: { transaction_id: originalTransaction.transaction_id } });
     expect(updatedOriginalTransaction.status).toBe(TransactionStatus.MISMATCH);
   });
 
-  test('Scenario 3: No Match Found (Fallback to Generate New)', async () => {
+  test('Scenario 3: No Match Found (Staging Entry marked for Manual Review)', async () => {
     const stagingEntryData = {
       account_id: account1.account_id,
       entry_type: EntryType.DEBIT,
@@ -311,49 +346,49 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
       currency: 'USD',
       status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
       effective_date: new Date(),
-      metadata: { order_id: 'order_no_match' },
+      metadata: { order_id: 'order_no_match_manual_review' }, // Unique order_id for this test
     };
     const stagingEntry = await prisma.stagingEntry.create({ data: stagingEntryData });
 
-    const result = await processStagingEntryWithRecon(stagingEntry, merchant.merchant_id);
-
-    expect(result.transaction_id).toBeDefined(); // A new transaction should be created
-    expect(result.status).toBe(TransactionStatus.POSTED);
-    expect(result.entries.length).toBe(2);
-    const postedEntry = result.entries.find(e => e.status === EntryStatus.POSTED && e.account_id === account1.account_id);
-    const expectedEntry = result.entries.find(e => e.status === EntryStatus.EXPECTED && e.account_id === account2.account_id);
-    expect(postedEntry).toBeDefined();
-    expect(expectedEntry).toBeDefined();
+    // "No match" should now reject and mark for manual review without discarding.
+    const expectedErrorMessage = `No matching expected entry found for staging_entry_id ${stagingEntry.staging_entry_id}. Staging entry requires manual review.`;
+    
+    await expect(processStagingEntryWithRecon(stagingEntry, merchant.merchant_id))
+      .rejects
+      .toThrow(expectedErrorMessage);
     
     const updatedStagingEntry = await prisma.stagingEntry.findUnique({ where: { staging_entry_id: stagingEntry.staging_entry_id } });
-    expect(updatedStagingEntry.status).toBe(StagingEntryStatus.PROCESSED);
-    expect(updatedStagingEntry.discarded_at).not.toBeNull();
-    // Ensure no match metadata is present
-    expect(updatedStagingEntry.metadata.matched_transaction_id).toBeUndefined();
-    expect(updatedStagingEntry.metadata.matched_entry_id).toBeUndefined();
+    expect(updatedStagingEntry.status).toBe(StagingEntryStatus.NEEDS_MANUAL_REVIEW);
+    expect(updatedStagingEntry.discarded_at).toBeNull(); // Crucially, not discarded
+    expect(updatedStagingEntry.metadata.error).toBe(expectedErrorMessage);
+    expect(updatedStagingEntry.metadata.error_type).toBe('NoMatchFoundError');
+    expect(updatedStagingEntry.metadata.created_transaction_id).toBeUndefined(); // No new transaction
+    expect(updatedStagingEntry.metadata.match_type).toBeUndefined();
   });
 
   test('Scenario 4: Ambiguous Match (Multiple Expected Entries)', async () => {
-    const orderId = 'order_ambiguous';
-    // Create first expected entry
-    const initialStagingEntry1Data = {
-      account_id: account1.account_id,
-      entry_type: EntryType.DEBIT,
-      amount: new Decimal('50.00'),
-      currency: 'USD',
-      status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
-      effective_date: new Date(),
-      metadata: { order_id: orderId },
-    };
-    const initialStagingEntry1 = await prisma.stagingEntry.create({ data: initialStagingEntry1Data });
-    await processStagingEntryWithRecon(initialStagingEntry1, merchant.merchant_id);
+    const orderIdAmbiguous = 'order_ambiguous_manual';
+    // Create first transaction with an EXPECTED entry
+    await prisma.transaction.create({
+      data: {
+        merchant_id: merchant.merchant_id,
+        status: TransactionStatus.EXPECTED,
+        logical_transaction_id: `ltid_${orderIdAmbiguous}_1`,
+        entries: {
+          create: [
+            { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('50.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderIdAmbiguous, note: "Ambiguous source 1 posted" } },
+            { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('50.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderIdAmbiguous, note: "Ambiguous source 1 expected" } },
+          ],
+        },
+      },
+    });
 
-    // Create a second transaction with an expected entry for the same account and order_id
-    const transaction2 = await prisma.transaction.create({
+    // Create a second transaction with another EXPECTED entry for the same order_id and account_id
+    await prisma.transaction.create({
       data: {
         merchant_id: merchant.merchant_id,
         status: TransactionStatus.POSTED, 
-        logical_transaction_id: `logical_${orderId}_2`,
+        logical_transaction_id: `logical_${orderIdAmbiguous}_2`,
         entries: {
           create: [
             {
@@ -363,7 +398,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
               currency: 'USD',
               status: EntryStatus.POSTED,
               effective_date: new Date(),
-              metadata: { order_id: orderId, note: "Second source for ambiguity" },
+              metadata: { order_id: orderIdAmbiguous, note: "Second source for ambiguity" },
             },
             {
               account_id: account2.account_id, // The ambiguous expected entry
@@ -372,7 +407,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
               currency: 'USD',
               status: EntryStatus.EXPECTED,
               effective_date: new Date(),
-              metadata: { order_id: orderId, source_staging_entry_id: 'manual_ambiguous_source_2' },
+              metadata: { order_id: orderIdAmbiguous, source_staging_entry_id: 'manual_ambiguous_source_2' },
             },
           ],
         },
@@ -387,7 +422,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
       currency: 'USD',
       status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
       effective_date: new Date(),
-      metadata: { order_id: orderId },
+      metadata: { order_id: orderIdAmbiguous }, // Use the same orderId
     };
     const fulfillingStagingEntry = await prisma.stagingEntry.create({ data: fulfillingStagingEntryData });
 
@@ -398,7 +433,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     const updatedStagingEntry = await prisma.stagingEntry.findUnique({ where: { staging_entry_id: fulfillingStagingEntry.staging_entry_id } });
     expect(updatedStagingEntry.status).toBe(StagingEntryStatus.NEEDS_MANUAL_REVIEW);
     expect(updatedStagingEntry.metadata.error_type).toBe('AmbiguousMatchError');
-    expect(updatedStagingEntry.discarded_at).not.toBeNull();
+    expect(updatedStagingEntry.discarded_at).toBeNull(); // Should not be discarded
   });
 
 });

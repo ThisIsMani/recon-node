@@ -147,7 +147,7 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
           where: { staging_entry_id: stagingEntry.staging_entry_id },
           data: {
             status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
-            discarded_at: new Date(),
+            // discarded_at: new Date(), // Removed for NEEDS_MANUAL_REVIEW
             metadata: { ...stagingEntry.metadata, error: 'Ambiguous match: Multiple expected entries found.', error_type: 'AmbiguousMatchError' }
           },
         });
@@ -302,42 +302,28 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
             where: { staging_entry_id: stagingEntry.staging_entry_id },
             data: { 
               status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
-              discarded_at: new Date(),
+              // discarded_at: new Date(), // Removed for NEEDS_MANUAL_REVIEW
               metadata: { ...stagingEntry.metadata, error: mismatchReason, error_type: 'MismatchError', matched_transaction_id: originalTransaction.transaction_id }
             },
           });
         });
         throw new Error(`Mismatch detected for staging_entry_id ${stagingEntry.staging_entry_id}: ${mismatchReason}`);
       }
-    } else {
-      // No Match Found - Proceed with existing "Generate New" logic
-      logger.info(`[ReconEngine] No matching expected entry found for staging_entry_id ${stagingEntry.staging_entry_id}. Proceeding to generate new transaction.`);
-      const [actualEntryData, expectedEntryData] = await generateTransactionEntriesFromStaging(stagingEntry, merchantId);
-
-      const transactionShellData = {
-        merchant_id: merchantId,
-        status: TransactionStatus.POSTED, // This will create a transaction with one POSTED and one EXPECTED entry
-        metadata: { 
-          ...(stagingEntry.metadata || {}), 
-          source_staging_entry_id: stagingEntry.staging_entry_id 
-        },
-        // logical_transaction_id and version will use Prisma defaults
-      };
-
-      const newTransaction = await transactionCore.createTransactionInternal(
-        transactionShellData,
-        actualEntryData,
-        expectedEntryData
-      );
-
-      // If successful, update StagingEntry status to PROCESSED
+    } else { // This is the "NO match found" path - Mark for manual review and throw error
+      const noMatchReason = `No matching expected entry found for staging_entry_id ${stagingEntry.staging_entry_id}. Staging entry requires manual review.`;
+      logger.warn(`[ReconEngine] ${noMatchReason}`);
+      
       await prisma.stagingEntry.update({
         where: { staging_entry_id: stagingEntry.staging_entry_id },
-        data: { status: StagingEntryStatus.PROCESSED, discarded_at: new Date() },
+        data: {
+          status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
+          // discarded_at is NOT set here
+          metadata: { ...(stagingEntry.metadata || {}), error: noMatchReason, error_type: 'NoMatchFoundError' }
+        },
       });
-
-      logger.log(`Successfully processed staging_entry_id: ${stagingEntry.staging_entry_id}. New transaction created: ${newTransaction.transaction_id}`);
-      return newTransaction;
+      const noMatchError = new Error(noMatchReason);
+      noMatchError.name = 'NoMatchFoundError'; 
+      throw noMatchError;
     }
 
   } catch (error) {
@@ -346,25 +332,28 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
     // Ensure stagingEntry.metadata is not null before spreading
     const currentMetadata = stagingEntry.metadata || {};
 
-    if (error instanceof NoReconRuleFoundError || error instanceof BalanceError) {
+    // Check if status was already updated by a more specific handler
+    // This check might be overly cautious if all specific handlers re-throw.
+    // The primary goal is to ensure NEEDS_MANUAL_REVIEW is set without discarded_at for errors.
+    if (error.name === 'NoMatchFoundError' || error.message.startsWith('Ambiguous match') || error.message.startsWith('Mismatch detected')) {
+      // Status already set appropriately by the specific handlers, and discarded_at was intentionally not set.
+      // No further stagingEntry update needed here for these specific errors.
+    } else if (error instanceof NoReconRuleFoundError || error instanceof BalanceError) {
       try {
         await prisma.stagingEntry.update({
           where: { staging_entry_id: stagingEntry.staging_entry_id },
-          data: { status: StagingEntryStatus.NEEDS_MANUAL_REVIEW, discarded_at: new Date(), metadata: { ...currentMetadata, error: error.message, error_type: error.name } },
+          data: { status: StagingEntryStatus.NEEDS_MANUAL_REVIEW, /* discarded_at not set */ metadata: { ...currentMetadata, error: error.message, error_type: error.name } },
         });
         logger.log(`StagingEntry ${stagingEntry.staging_entry_id} marked as NEEDS_MANUAL_REVIEW due to ${error.name}.`);
       } catch (updateError) {
         logger.error(`Failed to update StagingEntry ${stagingEntry.staging_entry_id} status after ${error.name}: ${updateError.message}`, updateError);
       }
-    } else if (error.message.startsWith('Ambiguous match') || error.message.startsWith('Mismatch detected')) {
-      // These errors are already handled (staging entry status updated) before being re-thrown.
-      // No further action needed here for these specific error messages.
     } else {
-      // For other unexpected errors, also mark as needs manual review
+      // For other unexpected errors, also mark as needs manual review without discarding
       try {
         await prisma.stagingEntry.update({
           where: { staging_entry_id: stagingEntry.staging_entry_id },
-          data: { status: StagingEntryStatus.NEEDS_MANUAL_REVIEW, discarded_at: new Date(), metadata: { ...currentMetadata, error: error.message, error_type: error.name || 'GenericError' } },
+          data: { status: StagingEntryStatus.NEEDS_MANUAL_REVIEW, /* discarded_at not set */ metadata: { ...currentMetadata, error: error.message, error_type: error.name || 'GenericError' } },
         });
         logger.log(`StagingEntry ${stagingEntry.staging_entry_id} marked as NEEDS_MANUAL_REVIEW due to a generic error.`);
       } catch (updateError) {

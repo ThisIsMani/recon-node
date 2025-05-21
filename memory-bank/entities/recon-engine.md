@@ -32,22 +32,18 @@
                     -   Returns the `newEvolvedTransaction`.
                 -   **If invalid match (mismatch):**
                     -   Atomically updates the `originalTransaction.status` to `MISMATCH`.
-                    -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW`, sets `stagingEntry.discarded_at`, and adds error details in metadata.
+                    -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW` (without setting `discarded_at`), and adds error details in metadata.
                     -   Throws an error (`Mismatch detected...`).
             -   **If multiple matches are found (ambiguous match):**
-                -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW`, sets `stagingEntry.discarded_at`, and adds error details.
+                -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW` (without setting `discarded_at`), and adds error details.
                 -   Throws an error (`Ambiguous match...`).
             -   **If no match is found:**
-                -   Proceeds to generate a new transaction (see "Generate New Transaction Logic").
-        -   **Generate New Transaction Logic (if no match or after certain non-match related errors):**
-            -   Calls `generateTransactionEntriesFromStaging` to get `actualEntryData` and `expectedEntryData`.
-            -   Prepares `transactionShellData`.
-            -   Calls `transactionCore.createTransactionInternal` to create the transaction and its entries atomically.
-            -   If successful, updates the `StagingEntry` status to `PROCESSED` and sets `stagingEntry.discarded_at`.
-            -   Returns the `newTransaction`.
+                -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW` (without setting `discarded_at`), and adds error details.
+                -   Throws a `NoMatchFoundError`. (Does not proceed to generate new transaction).
         -   **Error Handling (General):**
-            -   If `NoReconRuleFoundError` or `BalanceError` occurs during new transaction generation, it updates the `StagingEntry` status to `NEEDS_MANUAL_REVIEW`, sets `stagingEntry.discarded_at`, and re-throws the error.
-            -   For other unexpected errors, it updates `StagingEntry` to `NEEDS_MANUAL_REVIEW`, sets `stagingEntry.discarded_at`, and re-throws the error.
+            -   The main `catch` block in `processStagingEntryWithRecon` handles errors.
+            -   If errors like `NoReconRuleFoundError` or `BalanceError` (which could occur if a different part of the logic *did* attempt transaction creation, though not the "no match" path currently) are caught, or if `NoMatchFoundError`, `MismatchError`, `AmbiguousMatchError` are caught, it ensures the `StagingEntry` status is `NEEDS_MANUAL_REVIEW` (without setting `discarded_at`).
+            -   For other unexpected errors, it also updates `StagingEntry` to `NEEDS_MANUAL_REVIEW` (without `discarded_at`).
 
 -   **`src/server/core/recon-engine/consumer.js`**:
     -   `async function processSingleTask()`:
@@ -74,20 +70,13 @@
             -   Return the new evolved transaction.
         -   If **invalid (mismatch)**:
             -   Update original `Transaction` status to `MISMATCH`.
-            -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW`, set `discarded_at`, with error details.
+            -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW` (without `discarded_at`), with error details.
             -   Throw `Error("Mismatch detected...")`. (End of flow)
     -   If **multiple matches found**:
-        -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW`, set `discarded_at`, with error details.
+        -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW` (without `discarded_at`), with error details.
         -   Throw `Error("Ambiguous match...")`. (End of flow)
-    -   If **no match found**: Proceed to step 3.
-3.  **Generate New Transaction (if no match):**
-    -   Call `generateTransactionEntriesFromStaging` to get `actualEntryData` and `expectedEntryData`.
-        -   If `NoReconRuleFoundError` is thrown: Update `StagingEntry` (including `discarded_at`), re-throw.
-    -   Prepare `transactionShellData`.
-    -   Call `transactionCore.createTransactionInternal`.
-        -   If `BalanceError` or other error is thrown: Update `StagingEntry` (including `discarded_at`), re-throw.
-4.  If `createTransactionInternal` is successful:
-    -   Update `StagingEntry` status to `PROCESSED` and set `discarded_at`.
-    -   Return the created transaction.
+    -   If **no match found**:
+        -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW` (without `discarded_at`), with error details.
+        -   Throw `NoMatchFoundError`. (End of flow - no new transaction generated automatically).
 
-This component is crucial for automating the creation of balanced, double-entry bookkeeping records. The matching and fulfillment logic aims to accurately evolve transactions when expected payments are realized, maintaining a clear audit trail.
+This component is crucial for automating the creation of balanced, double-entry bookkeeping records. The matching and fulfillment logic aims to accurately evolve transactions when expected payments are realized, maintaining a clear audit trail. Unmatched entries are flagged for manual review.

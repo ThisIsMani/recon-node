@@ -2,6 +2,27 @@
 
 ---
 **Date:** 2025-05-21
+**Task:** Refine Recon Engine "No Match" Behavior & `discarded_at` Logic
+**Status:** Completed
+**Summary:**
+- Modified `src/server/core/recon-engine/engine.js`:
+    - If no matching `EXPECTED` entry is found for a `StagingEntry`, the engine now updates the `StagingEntry` status to `NEEDS_MANUAL_REVIEW` and throws a `NoMatchFoundError`. It no longer attempts to automatically create a new transaction.
+    - Corrected the logic for setting `StagingEntry.discarded_at`:
+        - `discarded_at` is **NOT** set when a `StagingEntry` status becomes `NEEDS_MANUAL_REVIEW` (for any reason: no match, mismatch, ambiguous match, or other processing errors like `NoReconRuleFoundError` or `BalanceError` during fulfillment).
+        - `discarded_at` **IS** set only when a `StagingEntry` status becomes `PROCESSED` (e.g., after successful Phase 2 fulfillment).
+- Updated unit tests in `tests/recon-engine/core/recon-engine-matching.test.js` and `tests/recon-engine/core/recon-engine.js` to align with these changes. This involved:
+    - Modifying test setups in `recon-engine-matching.test.js` to manually create pre-existing `EXPECTED` entries for scenarios testing matches, mismatches, and ambiguous matches.
+    - Ensuring `order_id` consistency in `recon-engine-matching.test.js`.
+    - Correcting `Decimal` object usage in mocks and `mockStagingEntry` within `recon-engine.js`.
+    - Refactoring tests in `recon-engine.js` to correctly test error handling during the fulfillment phase and removing/skipping tests that were no longer applicable due to the "no match" logic change.
+- All 152 relevant tests are now passing. (1 test related to a previously removed "auto-create on no match" path remains skipped).
+- Updated Memory Bank documents: `memory-bank/entities/staging-entries.md`, `memory-bank/entities/recon-engine.md`, and `memory-bank/activeContext.md`.
+- This `progress.md` entry.
+**Issues/Notes:** Iterative test fixing was required due to the interconnected nature of the recon engine logic and test setups.
+**Next Steps:** Refer to `activeContext.md` for broader project next steps.
+
+---
+**Date:** 2025-05-21
 **Task:** Update Recon Engine Consumer Polling Interval
 **Status:** Completed
 **Summary:**
@@ -488,3 +509,40 @@
 - **Next Steps:**
     - Address remaining low code coverage areas if deemed necessary (e.g., `src/app.js`, `src/config/swaggerDef.js`, `src/db_models/index.js`).
     - Continue with Recon Engine development and testing.
+<environment_details>
+# VSCode Visible Files
+memory-bank/activeContext.md
+
+# VSCode Open Tabs
+src/server/core/staging-entry/index.js
+memory-bank/plans/2025-05-21-file-ingestion-api-path-refactor.md
+src/server/routes/staging-entry/index.js
+tests/staging-entry/staging-entry.js
+memory-bank/plans/2025-05-21-file-ingestion-api.md
+memory-bank/plans/2025-05-19-accounts-api.md
+package.json
+src/server.js
+README.md
+memory-bank/plans/2025-05-21-discard-processed-staging-entries.md
+src/server/core/recon-engine/consumer.js
+.env.example
+.env.test
+memory-bank/techContext.md
+memory-bank/progress.md
+prisma/schema.prisma
+src/server/core/recon-engine/engine.js
+tests/recon-engine/core/recon-engine-matching.test.js
+tests/recon-engine/core/recon-engine.js
+memory-bank/entities/staging-entries.md
+memory-bank/entities/recon-engine.md
+memory-bank/activeContext.md
+
+# Current Time
+21/05/2025, 8:15:31 pm (Asia/Calcutta, UTC+5.5:00)
+
+# Context Window Usage
+980,856 / 1,048.576K tokens used (94%)
+
+# Current Mode
+ACT MODE
+</environment_details>
