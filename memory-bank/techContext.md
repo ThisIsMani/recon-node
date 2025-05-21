@@ -42,3 +42,14 @@
 - **Logging:** Basic `console.log` and `console.error` are used. A more robust logging solution (e.g., `Winston`, `Pino`) should be considered for production.
 - **Testing:** No automated tests are set up yet. Frameworks like Jest, Mocha, Chai would be used.
 - **Production Deployment:** The current setup (`node src/server.js`) is suitable for development. For production, a process manager like PM2 and potentially a reverse proxy (e.g., Nginx) would be recommended.
+
+## Environment Variables
+
+- `PORT`: Defines the port on which the server listens. Defaults to `3000`.
+- `DB_USER`: Username for the PostgreSQL database.
+- `DB_HOST`: Hostname for the PostgreSQL database.
+- `DB_NAME`: Name of the PostgreSQL database.
+- `DB_PASSWORD`: Password for the PostgreSQL database.
+- `DB_PORT`: Port for the PostgreSQL database.
+- `LOGGING_ENABLED`: Set to `"false"` to disable logging. Defaults to `true`.
+- `RECON_ENGINE_POLL_INTERVAL_MS`: Controls the polling interval for the recon engine consumer in milliseconds. Defaults to `1000`ms (1 second).

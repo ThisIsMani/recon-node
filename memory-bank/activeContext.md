@@ -1,24 +1,27 @@
-# Active Context: Smart Ledger Backend (Node.js) - Recon Engine Phase 2 Complete
+# Active Context: Smart Ledger Backend (Node.js) - Consumer Polling Interval Updated
 
 **Current Focus:**
-- Recon Engine now sets `discarded_at` for `StagingEntry` records when they are processed (status `PROCESSED` or `NEEDS_MANUAL_REVIEW`).
-- All related unit tests (158 total) are passing.
-- Memory Bank documentation for `StagingEntry` and `Recon Engine` entities updated.
-- Changes committed and pushed.
+- Recon Engine consumer polling interval is now configurable via the `RECON_ENGINE_POLL_INTERVAL_MS` environment variable.
+- Default polling interval changed from 5 seconds to 1 second.
+- Relevant files (`consumer.js`, `.env.example`, `.env.test`) updated.
+- Memory Bank documentation (`techContext.md`, `recon-engine.md`) updated to reflect this change.
 
-**Key Decisions & Changes (StagingEntry Discard Logic):**
-1.  **Recon Engine Modification (`src/server/core/recon-engine/engine.js`):**
-    *   The `processStagingEntryWithRecon` function was updated.
-    *   In all instances where `StagingEntry.status` is set to `PROCESSED` or `NEEDS_MANUAL_REVIEW`, the `discarded_at` field is now also set to `new Date()`.
-2.  **Unit Tests Updated:**
-    *   `tests/recon-engine/core/recon-engine-matching.test.js`: Assertions added/updated to verify `stagingEntry.discarded_at` is populated after processing in various scenarios (successful match, mismatch, no match, ambiguous match).
-    *   `tests/recon-engine/core/recon-engine.js`: Assertions updated in mocked calls to `prisma.stagingEntry.update` to expect `discarded_at: expect.any(Date)`.
+**Key Decisions & Changes (Consumer Polling Interval):**
+1.  **Consumer Logic Update (`src/server/core/recon-engine/consumer.js`):**
+    *   The `startConsumer` function now reads `process.env.RECON_ENGINE_POLL_INTERVAL_MS`.
+    *   Defaults to 1000ms (1 second) if the environment variable is not set or invalid.
+2.  **Environment File Updates:**
+    *   `.env.example`: Added `RECON_ENGINE_POLL_INTERVAL_MS=1000`.
+    *   `.env.test`: Added `RECON_ENGINE_POLL_INTERVAL_MS=1000`.
 3.  **Memory Bank Updates:**
-    *   `memory-bank/plans/2025-05-21-discard-processed-staging-entries.md`: New plan file created for this task.
-    *   `memory-bank/entities/staging-entries.md`: Lifecycle section updated to reflect `discarded_at` behavior.
-    *   `memory-bank/entities/recon-engine.md`: Logic description updated to include setting `discarded_at`.
+    *   `memory-bank/techContext.md`: Documented the new `RECON_ENGINE_POLL_INTERVAL_MS` environment variable.
+    *   `memory-bank/entities/recon-engine.md`: Updated the consumer description to mention the configurable polling interval.
     *   `memory-bank/progress.md` (Will be updated to log completion of this task).
     *   This `activeContext.md` file.
+
+**Previous Context (StagingEntry Discard Logic - Still Relevant):**
+- Recon Engine now sets `discarded_at` for `StagingEntry` records when they are processed (status `PROCESSED` or `NEEDS_MANUAL_REVIEW`).
+- All related unit tests (158 total) are passing.
 
 **Previous Context (File Ingestion API - Still Relevant):**
 - CSV File Ingestion API for `StagingEntry` creation is complete, path: `POST /api/accounts/:account_id/staging-entries/files`.
@@ -33,5 +36,3 @@
 -   Added `start:consumer` script to `package.json` for easier execution of the Recon Engine consumer.
 -   Ensured `dotenv` is initialized at the top of `src/server.js` to correctly load environment variables for the main server.
 -   Updated `README.md` with instructions on how to run the Recon Engine consumer.
-
-The CSV file ingestion API for creating Staging Entries is now implemented, tested, and refactored to use the `/files` path. This provides a bulk data entry mechanism that integrates with the existing Recon Engine pipeline.

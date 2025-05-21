@@ -2,6 +2,22 @@
 
 ---
 **Date:** 2025-05-21
+**Task:** Update Recon Engine Consumer Polling Interval
+**Status:** Completed
+**Summary:**
+- Modified `src/server/core/recon-engine/consumer.js` to use the `RECON_ENGINE_POLL_INTERVAL_MS` environment variable for setting the polling interval, defaulting to 1000ms (1 second). Previously, it was hardcoded to 5000ms.
+- Added `RECON_ENGINE_POLL_INTERVAL_MS=1000` to `.env.example`.
+- Added `RECON_ENGINE_POLL_INTERVAL_MS=1000` to `.env.test`.
+- Updated Memory Bank documents:
+    - `memory-bank/techContext.md`: Documented the new environment variable.
+    - `memory-bank/entities/recon-engine.md`: Updated consumer description to mention configurable polling.
+    - `memory-bank/activeContext.md`: Updated to reflect the current task's completion.
+    - This `progress.md` entry.
+**Issues/Notes:** None.
+**Next Steps:** Refer to `activeContext.md` for broader project next steps.
+
+---
+**Date:** 2025-05-21
 **Task:** Set `discarded_at` for Processed Staging Entries
 **Status:** Completed
 **Summary:**
@@ -11,7 +27,6 @@
 - Created a new plan file: `memory-bank/plans/2025-05-21-discard-processed-staging-entries.md`.
 - Updated Memory Bank entity documents (`memory-bank/entities/staging-entries.md` and `memory-bank/entities/recon-engine.md`) to reflect the new behavior.
 - Updated `memory-bank/activeContext.md` and this `progress.md` entry.
-- Committed and pushed all changes to the remote repository.
 **Issues/Notes:** None.
 **Next Steps:** Refer to `activeContext.md` for broader project next steps.
 

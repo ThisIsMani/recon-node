@@ -94,7 +94,8 @@ async function processSingleTask() {
 
 
 // Renamed processTasks to processSingleTask, startConsumer will loop
-async function startConsumer(pollIntervalMs = 5000) { // Poll every 5 seconds by default
+async function startConsumer(defaultPollIntervalMs = 1000) { // Poll every 1 second by default
+  const pollIntervalMs = parseInt(process.env.RECON_ENGINE_POLL_INTERVAL_MS, 10) || defaultPollIntervalMs;
   logger.log(`Recon Engine Consumer: Starting... Polling every ${pollIntervalMs / 1000} seconds.`);
   
   // Indefinite loop for polling

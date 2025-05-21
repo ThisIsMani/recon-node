@@ -56,7 +56,7 @@
         -   Calls `reconEngine.processStagingEntryWithRecon(stagingEntry, merchantId)`.
         -   If `processStagingEntryWithRecon` is successful (returns a transaction object), updates the `ProcessTracker` task to `COMPLETED`.
         -   If `processStagingEntryWithRecon` throws any error, updates the `ProcessTracker` task to `FAILED`, storing error details.
-    -   `async function startConsumer()`: Polls for and processes tasks using `processSingleTask`.
+    -   `async function startConsumer()`: Polls for and processes tasks using `processSingleTask`. The polling interval is configurable via the `RECON_ENGINE_POLL_INTERVAL_MS` environment variable, defaulting to 1000ms (1 second).
 
 **Data Flow (within `processStagingEntryWithRecon` - Updated for Phase 2):**
 1.  Input: `StagingEntry` object, `merchantId`.
