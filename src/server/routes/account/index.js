@@ -299,7 +299,7 @@ router.put('/:account_id', async (req, res) => {
       return res.status(404).json({ error: error.message });
     }
     if (error.message.startsWith('Could not update account name. Internal error:')) {
-        console.error(`Unexpected error in PATCH /accounts/${account_id}: ${error.message}`, error.stack);
+        console.error(`Unexpected error in PUT /merchants/${merchant_id}/accounts/${account_id}: ${error.message}`, error.stack);
         return res.status(500).json({ error: 'An unexpected error occurred while updating the account name.' });
     }
     // For other errors from core (like validation if added later) or unexpected ones
