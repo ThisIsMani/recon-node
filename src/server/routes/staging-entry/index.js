@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer'); // Import multer
+const { StagingEntryProcessingMode } = require('@prisma/client'); // Import the enum
 const stagingEntryCore = require('../../core/staging-entry');
 
 // mergeParams: true allows us to access :account_id from the parent router (accounts)
@@ -43,7 +44,14 @@ const upload = multer({
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/StagingEntryInput'
+ *             allOf:
+ *               - $ref: '#/components/schemas/StagingEntryInput'
+ *               - type: object
+ *                 required:
+ *                   - processing_mode
+ *                 properties:
+ *                   processing_mode:
+ *                     $ref: '#/components/schemas/StagingEntryProcessingModeEnum'
  *     responses:
  *       201:
  *         description: Staging entry created successfully
@@ -67,7 +75,14 @@ const upload = multer({
 router.post('/', async (req, res) => {
   try {
     const { account_id } = req.params;
-    const entry = await stagingEntryCore.createStagingEntry(account_id, req.body);
+    const { processing_mode, ...entryData } = req.body;
+
+    if (!processing_mode || !Object.values(StagingEntryProcessingMode).includes(processing_mode)) {
+      return res.status(400).json({ error: `Invalid or missing processing_mode. Must be one of: ${Object.values(StagingEntryProcessingMode).join(', ')}` });
+    }
+
+    const entryPayload = { ...entryData, processing_mode };
+    const entry = await stagingEntryCore.createStagingEntry(account_id, entryPayload);
     res.status(201).json(entry);
   } catch (error) {
     if (process.env.NODE_ENV !== 'test') {
@@ -75,7 +90,8 @@ router.post('/', async (req, res) => {
     }
     const isBadRequest = error.message.includes('not found') || 
                          error.message.includes('Missing required fields') ||
-                         error.message.includes('Invalid input');
+                         error.message.includes('Invalid input') ||
+                         error.message.includes('processing_mode');
     res.status(isBadRequest ? 400 : 500).json({ error: error.message });
   }
 });
@@ -148,11 +164,17 @@ router.get('/', async (req, res) => {
  *         multipart/form-data:
  *           schema:
  *             type: object
+ *             required:
+ *               - file
+ *               - processing_mode
  *             properties:
  *               file:
  *                 type: string
  *                 format: binary
  *                 description: CSV file containing staging entries.
+ *               processing_mode:
+ *                 $ref: '#/components/schemas/StagingEntryProcessingModeEnum'
+ *                 description: The processing mode to apply to all entries in this file.
  *     responses:
  *       200:
  *         description: File processed, summary of ingestions and failures.
@@ -239,11 +261,16 @@ router.post('/files', (req, res, next) => { // Add next for custom error handlin
 }, async (req, res) => { // Actual route handler
   try {
     const { account_id } = req.params;
+    const { processing_mode } = req.body; // processing_mode from form field
+
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded.' });
     }
+    if (!processing_mode || !Object.values(StagingEntryProcessingMode).includes(processing_mode)) {
+      return res.status(400).json({ error: `Invalid or missing processing_mode form field. Must be one of: ${Object.values(StagingEntryProcessingMode).join(', ')}` });
+    }
 
-    const result = await stagingEntryCore.ingestStagingEntriesFromFile(account_id, req.file);
+    const result = await stagingEntryCore.ingestStagingEntriesFromFile(account_id, req.file, processing_mode);
     
     // Determine status code based on results
     if (result.failed_ingestions > 0 && result.successful_ingestions > 0) {

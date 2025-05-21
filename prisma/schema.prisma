@@ -123,20 +123,26 @@ model ReconRule {
 }
 
 enum StagingEntryStatus {
-  PENDING // New default status
+  PENDING 
   NEEDS_MANUAL_REVIEW
   PROCESSED
 }
 
+enum StagingEntryProcessingMode {
+  CONFIRMATION // Indicates the entry should match an existing expectation
+  TRANSACTION  // Indicates the entry should create a new transaction and its expectation
+}
+
 model StagingEntry {
-  staging_entry_id String               @id @default(cuid())
+  staging_entry_id String                       @id @default(cuid())
   account_id         String
   entry_type         EntryType
   amount             Decimal
   currency           String
-  status             StagingEntryStatus   @default(PENDING) // Default to PENDING
+  status             StagingEntryStatus           @default(PENDING)
+  processing_mode    StagingEntryProcessingMode @default(CONFIRMATION) // New mandatory field with default
   effective_date     DateTime
-  metadata           Json?                @db.JsonB
+  metadata           Json?                        @db.JsonB
   discarded_at       DateTime?
   created_at         DateTime             @default(now())
   updated_at         DateTime             @updatedAt

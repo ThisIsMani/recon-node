@@ -1,13 +1,16 @@
 const prisma = require('../../../services/prisma');
-const { AccountType, EntryType } = require('@prisma/client'); // Import Enums
+const { AccountType, EntryType, StagingEntryProcessingMode } = require('@prisma/client'); // Import Enums
 const processTrackerCore = require('../process-tracker'); // Import the process tracker core logic
 const csv = require('csv-parser'); // Import csv-parser
 const { Readable } = require('stream'); // To stream from buffer
 
 async function createStagingEntry(account_id, entryData) {
-  const { entry_type, amount, currency, effective_date, metadata, discarded_at } = entryData;
-  if (!entry_type || amount == null || !currency || !effective_date) {
-    throw new Error('Missing required fields in body: entry_type, amount, currency, effective_date.');
+  const { entry_type, amount, currency, effective_date, metadata, discarded_at, processing_mode } = entryData; // Added processing_mode
+  if (!entry_type || amount == null || !currency || !effective_date || !processing_mode) { // Added processing_mode to validation
+    throw new Error('Missing required fields in body: entry_type, amount, currency, effective_date, processing_mode.');
+  }
+  if (!Object.values(StagingEntryProcessingMode).includes(processing_mode)) {
+    throw new Error(`Invalid processing_mode. Must be one of: ${Object.values(StagingEntryProcessingMode).join(', ')}`);
   }
   const account = await prisma.account.findUnique({ where: { account_id } });
   if (!account) {
@@ -20,10 +23,11 @@ async function createStagingEntry(account_id, entryData) {
         entry_type,
         amount,
         currency,
+        processing_mode, // Save processing_mode
         effective_date: new Date(effective_date),
         metadata: metadata || undefined,
         discarded_at: discarded_at ? new Date(discarded_at) : undefined,
-        // status defaults to NEEDS_MANUAL_REVIEW as per schema
+        // status defaults to PENDING as per schema
       },
     });
 
@@ -82,7 +86,7 @@ async function listStagingEntries(account_id, queryParams = {}) {
   }
 }
 
-async function ingestStagingEntriesFromFile(accountId, file) {
+async function ingestStagingEntriesFromFile(accountId, file, processingMode) { // Added processingMode parameter
   const results = [];
   const errors = [];
   let successfulIngestions = 0;
@@ -190,9 +194,10 @@ async function ingestStagingEntriesFromFile(accountId, file) {
               effective_date: new Date(data.transaction_date), // Ensure this is a Date object
               metadata: {
                 order_id: data.order_id,
-                source_file: file.originalname, // from function parameter 'file'
+                source_file: file.originalname, 
               },
-              // 'status' will default to NEEDS_MANUAL_REVIEW as per Prisma schema
+              processing_mode: processingMode, // Pass processingMode from parameter
+              // 'status' will default to PENDING as per Prisma schema
             };
             results.push({ 
               row_number: rowNumber, 

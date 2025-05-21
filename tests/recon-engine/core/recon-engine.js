@@ -4,7 +4,7 @@ const { generateTransactionEntriesFromStaging, NoReconRuleFoundError, processSta
 const prisma = require('../../../src/services/prisma');
 const transactionCore = require('../../../src/server/core/transaction');
 const { BalanceError } = require('../../../src/server/core/transaction');
-const { EntryStatus, EntryType, StagingEntryStatus, TransactionStatus } = require('@prisma/client');
+const { EntryStatus, EntryType, StagingEntryStatus, TransactionStatus, StagingEntryProcessingMode } = require('@prisma/client'); // Import StagingEntryProcessingMode
 const { Decimal } = require('@prisma/client/runtime/library'); // Import Decimal
 
 // Mock Prisma
@@ -108,6 +108,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       amount: new Decimal('200.00'), // Use Decimal
       currency: 'EUR',
       effective_date: new Date('2025-06-01T00:00:00.000Z'),
+      processing_mode: StagingEntryProcessingMode.CONFIRMATION, // Default to CONFIRMATION for most tests here
       metadata: { payment_ref: 'pay-abc' },
     };
     prisma.entry.findMany.mockResolvedValue([]); 
@@ -128,7 +129,8 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
     });
   });
 
-  test('should handle "No Match Found" (due to no ReconRule) by setting status to NEEDS_MANUAL_REVIEW and throwing NoMatchFoundError', async () => {
+  test('should handle "No Match Found" (CONFIRMATION mode, due to no ReconRule) by setting status to NEEDS_MANUAL_REVIEW and throwing NoMatchFoundError', async () => {
+    mockStagingEntry.processing_mode = StagingEntryProcessingMode.CONFIRMATION;
     const expectedErrorMessage = `No matching expected entry found for staging_entry_id ${mockStagingEntry.staging_entry_id}. Staging entry requires manual review.`;
     await expect(processStagingEntryWithRecon(mockStagingEntry, merchantId))
       .rejects
@@ -151,7 +153,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
       id: 'rule-for-balance-error',
       merchant_id: merchantId,
       account_one_id: 'some-other-account',
-      account_two_id: mockStagingEntry.account_id, 
+      account_two_id: mockStagingEntry.account_id,
     });
 
     const mockOriginalTransaction = {
@@ -171,6 +173,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
     transactionCore.createTransactionInternal.mockRejectedValueOnce(new BalanceError(balanceErrorMessage));
     
     mockStagingEntry.metadata.order_id = orderId;
+    mockStagingEntry.processing_mode = StagingEntryProcessingMode.CONFIRMATION; // Ensure mode is CONFIRMATION
 
     await expect(processStagingEntryWithRecon(mockStagingEntry, merchantId)).rejects.toThrow(BalanceError);
     
@@ -211,6 +214,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
     const genericErrorMessage = 'Generic createTransactionInternal error during fulfillment';
     transactionCore.createTransactionInternal.mockRejectedValueOnce(new Error(genericErrorMessage));
     mockStagingEntry.metadata.order_id = orderId;
+    mockStagingEntry.processing_mode = StagingEntryProcessingMode.CONFIRMATION; // Ensure mode is CONFIRMATION
 
     await expect(processStagingEntryWithRecon(mockStagingEntry, merchantId)).rejects.toThrow(genericErrorMessage);
 
@@ -261,6 +265,7 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
     prisma.entry.findMany.mockResolvedValueOnce([{ ...mockOriginalTransaction.entries[1], transaction: mockOriginalTransaction }]);
 
     mockStagingEntry.metadata = { order_id: orderId, fulfilling_note: "this is the fulfillment" };
+    mockStagingEntry.processing_mode = StagingEntryProcessingMode.CONFIRMATION; // Ensure mode is CONFIRMATION
     
     const mockEvolvedTxId = 'evolved_txn_meta';
     transactionCore.createTransactionInternal.mockResolvedValueOnce({
@@ -297,5 +302,89 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
          derived_from_entry_id: 'orig_posted_meta',
       })
     );
+  });
+
+  // Tests for TRANSACTION processing_mode
+  describe('Processing Mode: TRANSACTION', () => {
+    beforeEach(() => {
+      mockStagingEntry.processing_mode = StagingEntryProcessingMode.TRANSACTION;
+    });
+
+    test('should create a new transaction with POSTED and EXPECTED entries', async () => {
+      const mockGeneratedEntries = [
+        { account_id: 'acc1', entry_type: EntryType.DEBIT, amount: new Decimal('100'), status: EntryStatus.POSTED, metadata: { order_id: 'tx_mode_order1'} },
+        { account_id: 'acc2', entry_type: EntryType.CREDIT, amount: new Decimal('100'), status: EntryStatus.EXPECTED, metadata: { order_id: 'tx_mode_order1'}  }
+      ];
+      // Mock generateTransactionEntriesFromStaging to be successful
+      jest.spyOn(require('../../../src/server/core/recon-engine/engine'), 'generateTransactionEntriesFromStaging')
+          .mockResolvedValueOnce(mockGeneratedEntries);
+      
+      const mockNewTransaction = { transaction_id: 'new_tx_123', status: TransactionStatus.EXPECTED, entries: mockGeneratedEntries };
+      transactionCore.createTransactionInternal.mockResolvedValueOnce(mockNewTransaction);
+
+      const result = await processStagingEntryWithRecon(mockStagingEntry, merchantId);
+
+      expect(require('../../../src/server/core/recon-engine/engine').generateTransactionEntriesFromStaging).toHaveBeenCalledWith(mockStagingEntry, merchantId);
+      expect(transactionCore.createTransactionInternal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          merchant_id: merchantId,
+          status: TransactionStatus.EXPECTED,
+          metadata: expect.objectContaining({ source_staging_entry_id: mockStagingEntry.staging_entry_id, processing_mode: StagingEntryProcessingMode.TRANSACTION })
+        }),
+        mockGeneratedEntries[0],
+        mockGeneratedEntries[1]
+      );
+      expect(prisma.stagingEntry.update).toHaveBeenCalledWith({
+        where: { staging_entry_id: mockStagingEntry.staging_entry_id },
+        data: {
+          status: StagingEntryStatus.PROCESSED,
+          discarded_at: expect.any(Date),
+          metadata: expect.objectContaining({ created_transaction_id: 'new_tx_123', match_type: 'NewTransactionGenerated' }),
+        },
+      });
+      expect(result).toEqual(mockNewTransaction);
+    });
+
+    test('should handle NoReconRuleFoundError from generateTransactionEntriesFromStaging in TRANSACTION mode', async () => {
+      const errorMessage = 'No rule for TRANSACTION mode';
+      jest.spyOn(require('../../../src/server/core/recon-engine/engine'), 'generateTransactionEntriesFromStaging')
+          .mockRejectedValueOnce(new NoReconRuleFoundError(errorMessage));
+
+      await expect(processStagingEntryWithRecon(mockStagingEntry, merchantId)).rejects.toThrow(NoReconRuleFoundError);
+      
+      expect(prisma.stagingEntry.update).toHaveBeenCalledWith({
+        where: { staging_entry_id: mockStagingEntry.staging_entry_id },
+        data: {
+          status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
+          metadata: expect.objectContaining({ error: errorMessage, error_type: 'NoReconRuleFoundError' }),
+        },
+      });
+      const updateCallData = prisma.stagingEntry.update.mock.calls[0][0].data;
+      expect(updateCallData.discarded_at).toBeUndefined();
+    });
+
+    test('should handle BalanceError from createTransactionInternal in TRANSACTION mode', async () => {
+      const mockGeneratedEntries = [
+        { account_id: 'acc1', entry_type: EntryType.DEBIT, amount: new Decimal('100'), status: EntryStatus.POSTED },
+        { account_id: 'acc2', entry_type: EntryType.CREDIT, amount: new Decimal('100'), status: EntryStatus.EXPECTED }
+      ];
+      jest.spyOn(require('../../../src/server/core/recon-engine/engine'), 'generateTransactionEntriesFromStaging')
+          .mockResolvedValueOnce(mockGeneratedEntries);
+      
+      const balanceErrorMessage = 'Balance error in TRANSACTION mode';
+      transactionCore.createTransactionInternal.mockRejectedValueOnce(new BalanceError(balanceErrorMessage));
+
+      await expect(processStagingEntryWithRecon(mockStagingEntry, merchantId)).rejects.toThrow(BalanceError);
+
+      expect(prisma.stagingEntry.update).toHaveBeenCalledWith({
+        where: { staging_entry_id: mockStagingEntry.staging_entry_id },
+        data: {
+          status: StagingEntryStatus.NEEDS_MANUAL_REVIEW,
+          metadata: expect.objectContaining({ error: balanceErrorMessage, error_type: 'BalanceError' }),
+        },
+      });
+      const updateCallData = prisma.stagingEntry.update.mock.calls[0][0].data;
+      expect(updateCallData.discarded_at).toBeUndefined();
+    });
   });
 });
