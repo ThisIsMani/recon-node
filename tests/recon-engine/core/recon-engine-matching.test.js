@@ -186,18 +186,17 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment (Phase 1 & 2)', ()
     expect(originalEntries.length).toBe(2); // Assuming 2 entries per transaction
     originalEntries.forEach(entry => {
       expect(entry.discarded_at).not.toBeNull();
-      // Check that status is one of the original, non-archived statuses
-      expect([EntryStatus.POSTED, EntryStatus.EXPECTED]).toContain(entry.status); 
+      expect(entry.status).toBe(EntryStatus.ARCHIVED); // Verify status is ARCHIVED
     });
     
     // Specifically check the original expected entry's status and discarded_at
     const originalExpectedEntryArchived = originalEntries.find(e => e.entry_id === expectedEntry.entry_id);
-    expect(originalExpectedEntryArchived.status).toBe(EntryStatus.EXPECTED); // Preserved status
+    expect(originalExpectedEntryArchived.status).toBe(EntryStatus.ARCHIVED); // Status is ARCHIVED
     expect(originalExpectedEntryArchived.discarded_at).not.toBeNull();
 
     // Specifically check the original posted entry's status and discarded_at
     const originalPostedEntryArchived = originalEntries.find(e => e.entry_id === originalPostedEntry.entry_id);
-    expect(originalPostedEntryArchived.status).toBe(EntryStatus.POSTED); // Preserved status
+    expect(originalPostedEntryArchived.status).toBe(EntryStatus.ARCHIVED); // Status is ARCHIVED
     expect(originalPostedEntryArchived.discarded_at).not.toBeNull();
   });
 

@@ -6,6 +6,7 @@ Staging Entries represent financial movements that are captured in a temporary h
 **Prisma Schema Definition (`StagingEntry` model from `prisma/schema.prisma`):**
 ```prisma
 enum StagingEntryStatus {
+  PENDING // New default status
   NEEDS_MANUAL_REVIEW
   PROCESSED
 }
@@ -16,7 +17,7 @@ model StagingEntry {
   entry_type         EntryType
   amount             Decimal
   currency           String
-  status             StagingEntryStatus   @default(NEEDS_MANUAL_REVIEW)
+  status             StagingEntryStatus   @default(PENDING) // Default to PENDING
   effective_date     DateTime
   metadata           Json?                @db.JsonB
   discarded_at       DateTime?
@@ -53,6 +54,7 @@ enum EntryType {
 
 **Lifecycle & Purpose:**
 - Staging entries serve as an initial capture point for financial data that may require validation or manual intervention.
-- `NEEDS_MANUAL_REVIEW`: Default state. Also set if automated processing by the Recon Engine encounters issues (e.g., no matching `EXPECTED` entry found, ambiguous match, data validation failure during matching, or errors like `NoReconRuleFoundError` if a new transaction creation were attempted and failed). When an entry is moved to this state due to a processing issue, `discarded_at` is **NOT** set, as the entry still requires attention.
+- `PENDING`: The default status for a newly created `StagingEntry`. It indicates that the entry has been ingested but not yet picked up by the Recon Engine for processing. `discarded_at` is **NOT** set.
+- `NEEDS_MANUAL_REVIEW`: Set by the Recon Engine if automated processing encounters issues (e.g., no matching `EXPECTED` entry found, ambiguous match, data validation failure during matching, or errors like `NoReconRuleFoundError`). When an entry is moved to this state, `discarded_at` is **NOT** set, as the entry still requires attention.
 - `PROCESSED`: Indicates the entry has been successfully handled by the Recon Engine (e.g., an existing expectation was fulfilled and an evolved transaction was created). When an entry is successfully processed, its `discarded_at` field **IS** set to the current timestamp, signifying it has been fully actioned.
 - This entity is distinct from the final `Entry` model that will represent posted ledger movements.

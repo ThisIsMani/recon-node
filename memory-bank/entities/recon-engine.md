@@ -18,7 +18,7 @@
                 -   Validates the `amount`, `currency`, and `entry_type` of the `stagingEntry` against the `matchedExpectedEntry`.
                 -   **If valid match (Phase 2 Fulfillment):**
                     -   Atomically (using `prisma.$transaction`):
-                        -   Archives the `originalTransaction` (status `ARCHIVED`, `discarded_at` set).
+                        -   Archives the `originalTransaction` (status `ARCHIVED`, `discarded_at` set). Also, all `Entry` records belonging to this `originalTransaction` have their status updated to `EntryStatus.ARCHIVED` and their `discarded_at` field set.
                         -   Prepares data for a new evolved transaction:
                             -   `logical_transaction_id`: same as `originalTransaction`.
                             -   `version`: `originalTransaction.version + 1`.
@@ -62,7 +62,7 @@
         -   Validate `amount`, `currency`, `entry_type`.
         -   If **valid (Fulfillment Path)**:
             -   **Atomically:**
-                -   Archive original transaction (status `ARCHIVED`, set `discarded_at`).
+                -   Archive original transaction (status `ARCHIVED`, set `discarded_at`). All its `Entry` records are also updated to `status: EntryStatus.ARCHIVED` and have `discarded_at` set.
                 -   Create new evolved transaction (status `POSTED`, version incremented, same `logical_transaction_id`) with two `POSTED` entries:
                     -   One from the current `stagingEntry`.
                     -   One from the other (posted) leg of the original transaction.

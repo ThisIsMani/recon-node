@@ -1,26 +1,30 @@
-# Active Context: Smart Ledger Backend (Node.js) - Recon Engine Behavior & `discarded_at` Logic Updated
+# Active Context: Smart Ledger Backend (Node.js) - Entry Archival & StagingEntry PENDING Status
 
 **Current Focus:**
-- Recon Engine's "no match found" behavior for `StagingEntry` processing has been updated:
-    - If no matching `EXPECTED` entry is found, the `StagingEntry` status is set to `NEEDS_MANUAL_REVIEW`, and a `NoMatchFoundError` is thrown. No new transaction is automatically created.
-- The logic for setting `StagingEntry.discarded_at` has been corrected:
-    - `discarded_at` is **NOT** set when a `StagingEntry` status becomes `NEEDS_MANUAL_REVIEW` (for any reason: no match, mismatch, ambiguous match, or other processing errors).
-    - `discarded_at` **IS** set only when a `StagingEntry` status becomes `PROCESSED` (e.g., after successful Phase 2 fulfillment).
-- All relevant unit tests in `tests/recon-engine/` have been updated to reflect these changes, and all 152 tests are passing (one test previously relevant to auto-creation on no-match was removed, three others were refactored).
-- Memory Bank documentation (`entities/staging-entries.md`, `entities/recon-engine.md`) updated.
+- **Entry Archival:** When a `Transaction` is archived by the Recon Engine (during Phase 2 fulfillment), its constituent `Entry` records now also have their status updated to `EntryStatus.ARCHIVED` and their `discarded_at` field set.
+- **StagingEntry Status:**
+    - Added `PENDING` to the `StagingEntryStatus` enum in `prisma/schema.prisma`.
+    - `PENDING` is now the default status for newly created `StagingEntry` records.
+- Recon Engine's "no match found" behavior for `StagingEntry` processing remains: if no matching `EXPECTED` entry is found, the `StagingEntry` status is set to `NEEDS_MANUAL_REVIEW`, and a `NoMatchFoundError` is thrown.
+- The logic for setting `StagingEntry.discarded_at` remains: `discarded_at` is **NOT** set for `NEEDS_MANUAL_REVIEW` and **IS** set for `PROCESSED`.
+- All relevant unit tests have been updated, and all 152 tests are passing.
+- Memory Bank documentation (`entities/staging-entries.md`, `entities/recon-engine.md`, `entities/entries.md`) updated.
 
-**Key Decisions & Changes (Recon Engine Behavior & `discarded_at`):**
-1.  **Engine Logic Update (`src/server/core/recon-engine/engine.js`):**
-    *   Modified `processStagingEntryWithRecon` so that if no matching `EXPECTED` entry is found, it updates the `StagingEntry` to `NEEDS_MANUAL_REVIEW` (without `discarded_at`) and throws `NoMatchFoundError`.
-    *   Ensured `discarded_at` is not set in other `NEEDS_MANUAL_REVIEW` scenarios (mismatch, ambiguous match, general error handling in the main catch block).
-    *   Confirmed `discarded_at` is set when `StagingEntry` status becomes `PROCESSED` during successful Phase 2 fulfillment.
-2.  **Unit Test Updates:**
-    *   `tests/recon-engine/core/recon-engine-matching.test.js`: Adjusted assertions for `Scenario 3: No Match Found` to expect rejection and correct status/`discarded_at` (null). Verified `discarded_at` logic for other `NEEDS_MANUAL_REVIEW` and `PROCESSED` states. Ensured test setups correctly create pre-existing `EXPECTED` entries for match/mismatch scenarios.
-    *   `tests/recon-engine/core/recon-engine.js`: Removed one test that was no longer valid due to the "no match" logic change. Refactored other tests to correctly mock conditions for fulfillment phase errors and check `discarded_at`.
-3.  **Memory Bank Updates:**
-    *   `memory-bank/entities/staging-entries.md`: Updated lifecycle description for `discarded_at`.
-    *   `memory-bank/entities/recon-engine.md`: Updated data flow and error handling descriptions.
-    *   `memory-bank/progress.md` (Will be updated to log completion of this task).
+**Key Decisions & Changes (Entry Archival & StagingEntry PENDING):**
+1.  **Prisma Schema Update (`prisma/schema.prisma`):**
+    *   Added `PENDING` to `StagingEntryStatus` enum.
+    *   Set `@default(PENDING)` for `StagingEntry.status`.
+2.  **Engine Logic Update (`src/server/core/recon-engine/engine.js`):**
+    *   During Phase 2 fulfillment, when archiving an `originalTransaction`, the `updateMany` call for its entries now also sets `status: EntryStatus.ARCHIVED`.
+    *   (Previous changes for "no match" behavior and `StagingEntry.discarded_at` logic are maintained).
+3.  **Unit Test Updates:**
+    *   `tests/recon-engine/core/recon-engine-matching.test.js`: `Scenario 1` now asserts that original entries are `ARCHIVED`.
+    *   `tests/staging-entry/staging-entry.js`: API tests now assert that new staging entries default to `PENDING`.
+4.  **Memory Bank Updates:**
+    *   `memory-bank/entities/entries.md`: Updated to reflect that entries of archived transactions are marked `ARCHIVED`.
+    *   `memory-bank/entities/staging-entries.md`: Added `PENDING` status and updated default status.
+    *   `memory-bank/entities/recon-engine.md`: Updated Phase 2 fulfillment description.
+    *   `memory-bank/progress.md` (Will be updated).
     *   This `activeContext.md` file.
 
 **Previous Context (Consumer Polling Interval - Still Relevant):**

@@ -123,6 +123,7 @@ model ReconRule {
 }
 
 enum StagingEntryStatus {
+  PENDING // New default status
   NEEDS_MANUAL_REVIEW
   PROCESSED
 }
@@ -133,7 +134,7 @@ model StagingEntry {
   entry_type         EntryType
   amount             Decimal
   currency           String
-  status             StagingEntryStatus   @default(NEEDS_MANUAL_REVIEW)
+  status             StagingEntryStatus   @default(PENDING) // Default to PENDING
   effective_date     DateTime
   metadata           Json?                @db.JsonB
   discarded_at       DateTime?

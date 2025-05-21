@@ -60,7 +60,7 @@ model Entry {
 - `ARCHIVED`:
     - An entry that is no longer active, typically because it is part of an `ARCHIVED` transaction.
     - This occurs when a transaction is superseded by a newer version (due to fulfillment of an expectation or a manual correction).
-    - The `discarded_at` field on the parent `Transaction` should be populated. Individual entries themselves might not have `discarded_at` directly, as their archival is tied to the transaction's archival. (Note: The schema has `discarded_at` on `Entry` but current logic archives at the `Transaction` level).
+    - When a transaction is archived, its constituent entries also have their status updated to `ARCHIVED` and their `discarded_at` field is set.
 
 **Relationship with Transactions:**
 - An `Entry` *must* always belong to exactly one `Transaction`.

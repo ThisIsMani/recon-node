@@ -195,14 +195,15 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
           });
           logger.info(`[ReconEngine] Archived original transaction ${originalTransaction.transaction_id}`);
 
-          // Update discarded_at for all entries of the original transaction
+          // Update discarded_at and status for all entries of the original transaction
           await tx.entry.updateMany({
             where: { transaction_id: originalTransaction.transaction_id },
             data: {
               discarded_at: new Date(),
+              status: EntryStatus.ARCHIVED, // Set status to ARCHIVED
             },
           });
-          logger.info(`[ReconEngine] Marked all entries as discarded for original transaction ${originalTransaction.transaction_id}`);
+          logger.info(`[ReconEngine] Marked all entries as ARCHIVED and discarded for original transaction ${originalTransaction.transaction_id}`);
 
           // b. Prepare Data for the New Evolved Transaction
           const newTransactionShellData = {

@@ -49,7 +49,7 @@ describe('Staging Entry API Endpoints', () => {
         .send(entryData);
       expect(response.statusCode).toBe(201);
       expect(response.body).toHaveProperty('staging_entry_id');
-      expect(response.body.status).toBe('NEEDS_MANUAL_REVIEW');
+      expect(response.body.status).toBe('PENDING'); // Expect PENDING as default
       expect(response.body.amount.toString()).toBe('100.5');
       expect(response.body.discarded_at).toBeNull();
     });

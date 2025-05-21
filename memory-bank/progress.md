@@ -2,6 +2,26 @@
 
 ---
 **Date:** 2025-05-21
+**Task:** Update Entry Archival & Add PENDING Status to StagingEntry
+**Status:** Completed
+**Summary:**
+- Modified `prisma/schema.prisma`:
+    - Added `PENDING` to `StagingEntryStatus` enum.
+    - Set `@default(PENDING)` for `StagingEntry.status`.
+- Ran `npx prisma migrate dev --name add_pending_to_staging_entry_status` and `npx prisma generate`.
+- Modified `src/server/core/recon-engine/engine.js`:
+    - In Phase 2 fulfillment, when an `originalTransaction` is archived, its constituent `Entry` records now also have their status updated to `EntryStatus.ARCHIVED` (in addition to `discarded_at` being set).
+- Updated unit tests:
+    - `tests/recon-engine/core/recon-engine-matching.test.js`: `Scenario 1` now asserts that original entries are `ARCHIVED`.
+    - `tests/staging-entry/staging-entry.js`: API tests now assert that new staging entries default to `PENDING`.
+- All 152 tests are passing.
+- Updated Memory Bank documents: `memory-bank/entities/entries.md`, `memory-bank/entities/staging-entries.md`, `memory-bank/entities/recon-engine.md`, and `memory-bank/activeContext.md`.
+- This `progress.md` entry.
+**Issues/Notes:** The Prisma migration command noted the removal of a previously (and perhaps erroneously) added `ARCHIVED` status from `StagingEntryStatus` which was not intended to be there. This was resolved by the migration.
+**Next Steps:** Refer to `activeContext.md` for broader project next steps.
+
+---
+**Date:** 2025-05-21
 **Task:** Refine Recon Engine "No Match" Behavior & `discarded_at` Logic
 **Status:** Completed
 **Summary:**
@@ -542,6 +562,48 @@ memory-bank/activeContext.md
 
 # Context Window Usage
 980,856 / 1,048.576K tokens used (94%)
+
+# Current Mode
+ACT MODE
+</environment_details>
+<environment_details>
+# VSCode Visible Files
+../../../../../335
+.env.test
+memory-bank/activeContext.md
+memory-bank/activeContext.md
+memory-bank/progress.md
+
+# VSCode Open Tabs
+src/server/core/staging-entry/index.js
+memory-bank/plans/2025-05-21-file-ingestion-api-path-refactor.md
+src/server/routes/staging-entry/index.js
+memory-bank/plans/2025-05-21-file-ingestion-api.md
+memory-bank/plans/2025-05-19-accounts-api.md
+package.json
+src/server.js
+README.md
+memory-bank/plans/2025-05-21-discard-processed-staging-entries.md
+src/server/core/recon-engine/consumer.js
+.env.example
+.env.test
+memory-bank/techContext.md
+tests/recon-engine/core/recon-engine.js
+memory-bank/entities/staging-entries.md
+memory-bank/entities/recon-engine.md
+memory-bank/activeContext.md
+prisma/schema.prisma
+src/server/core/recon-engine/engine.js
+tests/recon-engine/core/recon-engine-matching.test.js
+tests/staging-entry/staging-entry.js
+memory-bank/entities/entries.md
+memory-bank/progress.md
+
+# Current Time
+21/05/2025, 8:31:30 pm (Asia/Calcutta, UTC+5.5:00)
+
+# Context Window Usage
+458,082 / 1,048.576K tokens used (44%)
 
 # Current Mode
 ACT MODE
