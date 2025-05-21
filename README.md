@@ -78,6 +78,14 @@ This will execute Jest tests defined in the `tests/` directory. Ensure your test
 -   The server will typically start on `http://localhost:3000` (or the port specified in your `.env` file).
 -   API documentation is available at `/api-docs` (e.g., `http://localhost:3000/api-docs`).
 
+### Starting the Recon Engine Consumer
+
+-   **Start the consumer service (for processing staging entries):**
+    ```bash
+    npm run start:consumer
+    ```
+-   This service runs independently and polls for tasks to process staging entries into final ledger transactions. Ensure your `DATABASE_URL` is correctly configured in `.env` for this service as well.
+
 ## Available API Endpoints
 
 See `/api-docs` for interactive documentation.
