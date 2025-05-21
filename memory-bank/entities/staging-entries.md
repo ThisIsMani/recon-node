@@ -41,10 +41,15 @@ enum EntryType {
 - `POST /api/accounts/:account_id/staging-entries`: Create a new staging entry for the specified account.
   - Request Body: `{ entry_type, amount, currency, effective_date, metadata?, discarded_at? }` (account_id is from path)
 - `GET /api/accounts/:account_id/staging-entries`: List staging entries for the specified account. Supports filtering by `status` via query parameters.
+- `POST /api/accounts/:account_id/staging-entries/files`: Ingest staging entries from a CSV file for a specific account.
+  - Request: `multipart/form-data` with a `file` field (CSV).
+  - CSV Columns Expected: `order_id`, `amount`, `currency`, `transaction_date`, `type` ("Payment" or "Refund").
+  - Response: Summary of successful and failed ingestions, with details for errors.
 
 **Core Logic (`src/server/core/staging-entry/index.js`):**
 - `createStagingEntry(account_id, entryData)`: Creates a new entry for the given account_id. **Upon successful creation, this function also acts as a "producer" by creating a `PROCESS_STAGING_ENTRY` task in the `ProcessTracker` for the Recon Engine to consume.**
 - `listStagingEntries(account_id, queryParams)`: Lists entries for the given account_id, allowing for filtering. Includes related account details.
+- `ingestStagingEntriesFromFile(accountId, file)`: Parses a CSV file, validates rows, transforms data (including determining DEBIT/CREDIT based on account type and CSV "type" field), and calls `createStagingEntry` for each valid row. Returns a summary of successes and failures.
 
 **Lifecycle & Purpose:**
 - Staging entries serve as an initial capture point for financial data that may require validation or manual intervention.

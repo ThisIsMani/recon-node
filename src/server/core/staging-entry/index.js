@@ -1,5 +1,8 @@
 const prisma = require('../../../services/prisma');
+const { AccountType, EntryType } = require('@prisma/client'); // Import Enums
 const processTrackerCore = require('../process-tracker'); // Import the process tracker core logic
+const csv = require('csv-parser'); // Import csv-parser
+const { Readable } = require('stream'); // To stream from buffer
 
 async function createStagingEntry(account_id, entryData) {
   const { entry_type, amount, currency, effective_date, metadata, discarded_at } = entryData;
@@ -79,7 +82,165 @@ async function listStagingEntries(account_id, queryParams = {}) {
   }
 }
 
+async function ingestStagingEntriesFromFile(accountId, file) {
+  const results = [];
+  const errors = [];
+  let successfulIngestions = 0;
+  let failedIngestions = 0;
+  let rowNumber = 0; // To track original row numbers for error reporting
+
+  // Step 6: Fetch Account Type
+  let account;
+  try {
+    account = await prisma.account.findUnique({
+      where: { account_id: accountId },
+      select: { account_type: true, account_id: true } // Select necessary fields
+    });
+  } catch (dbError) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.error(`Database error fetching account ${accountId}:`, dbError);
+    }
+    // Reject the promise, which will be caught by the route handler's catch block
+    return Promise.reject(new Error(`Error fetching account details for ID ${accountId}.`));
+  }
+
+  if (!account) {
+    // Reject the promise, route handler will convert to 404
+    return Promise.reject(new Error(`Account with ID ${accountId} not found.`));
+  }
+  // Ensure account_type is present, as per prerequisite.
+  // If not, this would be a schema/data issue.
+  if (!account.account_type) {
+    return Promise.reject(new Error(`Account type not defined for account ID ${accountId}. Please ensure schema and data are correct.`));
+  }
+
+  return new Promise((resolve, reject) => {
+    const stream = Readable.from(file.buffer.toString('utf8'));
+
+    stream
+      .pipe(csv())
+      .on('data', (data) => {
+        rowNumber++;
+        const currentErrors = [];
+        
+        // Validate presence of required fields
+        const requiredFields = ['order_id', 'amount', 'currency', 'transaction_date', 'type'];
+        for (const field of requiredFields) {
+          // Use String() to handle cases where data[field] might be a number (e.g. amount if not quoted in CSV)
+          // before trim, and check for null/undefined explicitly.
+          if (data[field] == null || String(data[field]).trim() === '') { 
+            currentErrors.push(`Missing required field: ${field}`);
+          }
+        }
+
+        // Validate data types
+        if (data.amount && isNaN(parseFloat(data.amount))) {
+          currentErrors.push(`Invalid amount: '${data.amount}' is not a number.`);
+        }
+        if (data.transaction_date) {
+          const date = new Date(data.transaction_date);
+          if (isNaN(date.getTime())) {
+            currentErrors.push(`Invalid transaction_date: '${data.transaction_date}' is not a valid date.`);
+          }
+        }
+        if (data.type && !['Payment', 'Refund'].includes(data.type)) {
+          currentErrors.push(`Invalid type: '${data.type}'. Must be 'Payment' or 'Refund'.`);
+        }
+
+        if (currentErrors.length > 0) {
+          errors.push({
+            row_number: rowNumber,
+            error_details: currentErrors.join('; '),
+            row_data: data,
+          });
+          failedIngestions++;
+        } else {
+          // Step 7: Determine EntryType (DEBIT/CREDIT)
+          let determinedPrismaEntryType; // Use Prisma's EntryType enum
+          if (account.account_type === AccountType.DEBIT_NORMAL) {
+            if (data.type === 'Payment') {
+              determinedPrismaEntryType = EntryType.DEBIT;
+            } else if (data.type === 'Refund') {
+              determinedPrismaEntryType = EntryType.CREDIT;
+            }
+          } else if (account.account_type === AccountType.CREDIT_NORMAL) {
+            if (data.type === 'Payment') {
+              determinedPrismaEntryType = EntryType.CREDIT;
+            } else if (data.type === 'Refund') {
+              determinedPrismaEntryType = EntryType.DEBIT;
+            }
+          }
+
+          if (!determinedPrismaEntryType) {
+            // This case should ideally not be hit if 'type' validation (Payment/Refund) is done
+            // and account.account_type is always DEBIT/CREDIT.
+            errors.push({
+              row_number: rowNumber,
+              error_details: `Could not determine EntryType for CSV type '${data.type}' and account type '${account.account_type}'.`,
+              row_data: data,
+            });
+            failedIngestions++;
+          } else {
+            // Step 8: Construct StagingEntry Data
+            const stagingEntryData = {
+              account_id: accountId, // from function parameter
+              entry_type: determinedPrismaEntryType, // Use the determined Prisma enum value
+              amount: parseFloat(data.amount), // Ensure this is a number
+              currency: data.currency,
+              effective_date: new Date(data.transaction_date), // Ensure this is a Date object
+              metadata: {
+                order_id: data.order_id,
+                source_file: file.originalname, // from function parameter 'file'
+              },
+              // 'status' will default to NEEDS_MANUAL_REVIEW as per Prisma schema
+            };
+            results.push({ 
+              row_number: rowNumber, 
+              staging_entry_payload: stagingEntryData 
+            });
+          }
+        }
+      })
+      .on('end', async () => { // Make this async to await createStagingEntry calls
+        // Step 9: Create Staging Entries
+        for (const item of results) { // 'results' contains { row_number, staging_entry_payload }
+          try {
+            await createStagingEntry(accountId, item.staging_entry_payload);
+            successfulIngestions++;
+          } catch (dbError) {
+            if (process.env.NODE_ENV !== 'test') {
+              console.error(`Error creating staging entry for row ${item.row_number}:`, dbError.message);
+            }
+            errors.push({
+              row_number: item.row_number,
+              error_details: `Failed to create staging entry in database: ${dbError.message}`,
+              row_data: item.staging_entry_payload, // Show the payload that failed
+            });
+            failedIngestions++; // Increment failedIngestions for DB errors too
+          }
+        }
+        
+        if (process.env.NODE_ENV !== 'test') {
+            console.log('CSV processing complete. Staging entries creation attempted.');
+        }
+        resolve({
+          message: "File processing complete.",
+          successful_ingestions: successfulIngestions,
+          failed_ingestions: failedIngestions,
+          errors: errors,
+        });
+      })
+      .on('error', (error) => {
+        if (process.env.NODE_ENV !== 'test') {
+            console.error('Error parsing CSV:', error);
+        }
+        reject(new Error('Failed to parse CSV file.'));
+      });
+  });
+}
+
 module.exports = {
   createStagingEntry,
   listStagingEntries,
+  ingestStagingEntriesFromFile, // Add the new function here
 };

@@ -1,6 +1,62 @@
 # Progress Log: Smart Ledger Backend (Node.js)
 
 ---
+**Date:** 2025-05-21
+**Task:** Refactor File Ingestion API Path
+**Status:** Completed
+**Summary:**
+- Refactored the File Ingestion API endpoint path from `/api/accounts/:account_id/staging-entries/ingest-file` to `/api/accounts/:account_id/staging-entries/files`.
+- Updated route definition in `src/server/routes/staging-entry/index.js`.
+- Updated Swagger JSDoc comments to reflect the new path.
+- Updated API tests in `tests/staging-entry/staging-entry.js` to use the new path; all 158 project tests pass.
+- Updated Memory Bank documents (`entities/staging-entries.md`, `plans/2025-05-21-file-ingestion-api.md`, `activeContext.md`, and this progress entry) to reflect the new path.
+**Issues/Notes:** This refactor was done to align with more common RESTful naming conventions, using a noun (`/files`) for the resource being acted upon by the `POST` method.
+**Next Steps:** Refer to `activeContext.md` for broader project next steps.
+
+---
+**Date:** 2025-05-21
+**Task:** Implement File Ingestion API for Staging Entries
+**Status:** Completed
+**Summary:**
+- Implemented a new API endpoint `POST /api/accounts/:account_id/staging-entries/ingest-file` (later refactored to `/api/accounts/:account_id/staging-entries/files`) to allow bulk creation of `StagingEntry` records from a CSV file.
+- Added `multer` and `csv-parser` dependencies for handling `multipart/form-data` and parsing CSV streams.
+- **Route Handler (`src/server/routes/staging-entry/index.js`):**
+    - Configured `multer` for CSV file uploads (memory storage, file type filter, size limit).
+    - Added the new route, applying `multer` middleware.
+    - Handles file presence validation and calls the core ingestion logic.
+    - Determines response status (200 OK, 207 Multi-Status, 400 Bad Request, 404 Not Found, 500 Internal Server Error) based on the outcome from the core logic.
+    - Added Swagger JSDoc comments for API documentation.
+- **Core Logic (`src/server/core/staging-entry/index.js`):**
+    - Created `ingestStagingEntriesFromFile(accountId, file)` function.
+    - Fetches `Account` details (including `account_type`) for the given `accountId`.
+    - Streams and parses the CSV file content using `csv-parser`.
+    - For each CSV row:
+        - Validates presence of required fields (`order_id`, `amount`, `currency`, `transaction_date`, `type`).
+        - Validates data types (numeric amount, valid date, "Payment"/"Refund" for type).
+        - Determines `StagingEntry.entry_type` (DEBIT/CREDIT) based on `Account.account_type` and the CSV `type` field.
+        - Constructs the `StagingEntry` data payload, including metadata (`order_id`, `source_file`).
+    - Calls the existing `createStagingEntry(accountId, payload)` for each valid, transformed row. This also triggers `ProcessTracker` task creation.
+    - Aggregates results, counting successful ingestions and collecting detailed errors for failed rows (both validation and database errors).
+    - Returns a summary object: `{ message, successful_ingestions, failed_ingestions, errors }`.
+- **Unit/Integration Tests (`tests/staging-entry/staging-entry.js`):**
+    - Added a new `describe` block for the file ingestion endpoint.
+    - Tests cover:
+        - Successful ingestion of a valid CSV.
+        - Partial success with a CSV containing mixed valid/invalid rows (207 Multi-Status).
+        - Ingestion of a CSV where all rows are invalid.
+        - Requests with no file uploaded (400).
+        - Requests with an invalid file type (non-CSV) (400).
+        - Requests for a non-existent `account_id` (404).
+    - Ensured test setup uses `AccountType.DEBIT_NORMAL` for consistency with core logic and Prisma enums.
+- **Memory Bank Updates:**
+    - `memory-bank/plans/2025-05-21-file-ingestion-api.md` created and followed.
+    - `memory-bank/entities/staging-entries.md` updated with details of the API endpoint and core function.
+    - `memory-bank/activeContext.md` updated to reflect completion of this feature.
+    - This `progress.md` entry added.
+**Issues/Notes:** Initial test runs failed due to incorrect `DATABASE_URL` setup for `jest.globalSetup.js` (resolved by creating `.env.test`), incorrect Prisma enum usage in tests (resolved by using `AccountType.DEBIT_NORMAL`), and incorrect API path in tests (resolved by correcting to full nested path). Subsequent test failures related to valid rows not being processed were fixed by correcting enum comparison in core logic (`account.account_type === AccountType.DEBIT_NORMAL`). Multer error handling for invalid file types was also improved.
+**Next Steps:** API path was subsequently refactored. Refer to `activeContext.md` for broader project next steps.
+
+---
 **Date:** 2025-05-20
 **Task:** Recon Engine - Phase 2: Transaction Evolution (Archival & Fulfillment)
 **Status:** Completed
