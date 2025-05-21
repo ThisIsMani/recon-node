@@ -39,5 +39,6 @@
 -   Performance optimization for large datasets (especially relevant for file ingestion).
 -   Develop a User Interface for managing `NEEDS_MANUAL_REVIEW` items and visualizing reconciliation.
 -   Address any remaining low code coverage areas if deemed necessary.
+-   Added `start:consumer` script to `package.json` for easier execution of the Recon Engine consumer.
 
 The CSV file ingestion API for creating Staging Entries is now implemented, tested, and refactored to use the `/files` path. This provides a bulk data entry mechanism that integrates with the existing Recon Engine pipeline.

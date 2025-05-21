@@ -2,6 +2,18 @@
 
 ---
 **Date:** 2025-05-21
+**Task:** Add npm script for Recon Engine Consumer
+**Status:** Completed
+**Summary:**
+- Added a new script `start:consumer` to `package.json`. The script executes `node src/recon-engine-runner.js`.
+- This allows the Recon Engine consumer to be started with `npm run start:consumer`.
+- Committed and pushed this change to the remote repository.
+- Updated `memory-bank/activeContext.md` and this `progress.md` entry.
+**Issues/Notes:** The initial attempt to run the consumer service failed due to a missing `DATABASE_URL` environment variable. This needs to be set up correctly for the consumer to run.
+**Next Steps:** Ensure `DATABASE_URL` is configured in `.env` before running the consumer.
+
+---
+**Date:** 2025-05-21
 **Task:** Refactor File Ingestion API Path
 **Status:** Completed
 **Summary:**
