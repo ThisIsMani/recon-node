@@ -1,3 +1,5 @@
+require('dotenv').config(); // Load environment variables from .env file
+
 const app = require('./app');
 const config = require('./config');
 // const database = require('./services/database'); // Not strictly needed here unless testing connection at start
