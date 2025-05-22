@@ -1,39 +1,40 @@
-# Active Context: Smart Ledger Backend (Node.js) - Conditional Recon Matching & Entry/Staging Status Updates
+# Active Context: Smart Ledger Backend (Node.js) - Refined File Ingestion Types
 
 **Current Focus:**
-- **Conditional Recon Matching:** The Recon Engine (`processStagingEntryWithRecon`) now only attempts to match a `StagingEntry` against existing `EXPECTED` entries if the `StagingEntry.account_id` is `account_two_id` in an active `ReconRule`. Otherwise, the match attempt is bypassed, and the `StagingEntry` is flagged for manual review.
-- **Entry Archival:** When a `Transaction` is archived by the Recon Engine (during Phase 2 fulfillment), its constituent `Entry` records now also have their status updated to `EntryStatus.ARCHIVED` and their `discarded_at` field set.
-- **StagingEntry Status:**
-    - `PENDING` is the default status for newly created `StagingEntry` records.
-- Recon Engine's "no match found" behavior for `StagingEntry` processing (when a match is attempted but fails, or when a match is bypassed) results in `NEEDS_MANUAL_REVIEW` status and a `NoMatchFoundError`.
-- The logic for setting `StagingEntry.discarded_at` remains: `discarded_at` is **NOT** set for `NEEDS_MANUAL_REVIEW` and **IS** set for `PROCESSED`.
-- All relevant unit tests have been updated to reflect these changes, and all 152 tests are passing.
-- Memory Bank documentation (`entities/staging-entries.md`, `entities/recon-engine.md`, `entities/entries.md`, `entities/recon-rules.md`) updated.
+- **File Ingestion API Refinement:** Updated the file ingestion logic (`ingestStagingEntriesFromFile` in `src/server/core/staging-entry/index.js`) to accept "DEBIT" or "CREDIT" (case-insensitive) as transaction types from CSV files. 'Chargeback' has been removed as a directly accepted CSV type for ingestion, simplifying the accepted types to 'Payment', 'Refund', 'DEBIT', and 'CREDIT'.
+- **Testing:** No direct unit tests were run for this specific change. Manual verification or API-level tests with updated CSV files would be needed.
 
-**Key Decisions & Changes (Conditional Matching, Entry Archival, StagingEntry PENDING):**
-1.  **Prisma Schema Update (`prisma/schema.prisma`):**
-    *   Added `PENDING` to `StagingEntryStatus` enum.
-    *   Set `@default(PENDING)` for `StagingEntry.status`.
-2.  **Engine Logic Update (`src/server/core/recon-engine/engine.js`):**
-    *   Implemented conditional matching: Fetches `ReconRule`. Only attempts to match if rule exists and `stagingEntry.account_id === reconRule.account_two_id`. Otherwise, throws `NoMatchFoundError`.
-    *   During Phase 2 fulfillment, when archiving an `originalTransaction`, the `updateMany` call for its entries now also sets `status: EntryStatus.ARCHIVED`.
-3.  **Unit Test Updates:**
-    *   `tests/recon-engine/core/recon-engine-matching.test.js`: Updated scenarios for conditional matching. Added tests for bypassed matching. Ensured `effective_date` is present in test data. `Scenario 1` asserts original entries are `ARCHIVED`.
-    *   `tests/recon-engine/core/recon-engine.js`: Added `ReconRule` setup for fulfillment tests to ensure matching path is taken.
-    *   `tests/staging-entry/staging-entry.js`: API tests now assert that new staging entries default to `PENDING`.
-4.  **Memory Bank Updates:**
-    *   `memory-bank/entities/entries.md`: Updated for `ARCHIVED` status of entries.
-    *   `memory-bank/entities/staging-entries.md`: Added `PENDING` status.
-    *   `memory-bank/entities/recon-engine.md`: Detailed conditional matching logic.
-    *   `memory-bank/entities/recon-rules.md`: Clarified implied roles of `account_one_id` and `account_two_id`.
+**Key Decisions & Changes (File Ingestion API Refinement):**
+1.  **Core Logic Update (`src/server/core/staging-entry/index.js`):**
+    *   Modified `ingestStagingEntriesFromFile`:
+        *   Updated CSV `type` field validation to accept 'Payment', 'Refund', 'DEBIT', 'CREDIT' (case-insensitive). 'Chargeback' is no longer in this explicit list.
+        *   Prioritized direct use of `EntryType.DEBIT` or `EntryType.CREDIT` if the CSV `type` is 'DEBIT' or 'CREDIT'.
+        *   Maintained fallback logic to determine `EntryType` based on `account.account_type` for CSV types 'Payment' and 'Refund'. The internal mapping for 'Chargeback' (if it was similar to 'Refund') has been removed from this specific CSV ingestion logic.
+2.  **Memory Bank Updates:**
     *   `memory-bank/progress.md` (Will be updated).
     *   This `activeContext.md` file.
+    *   `memory-bank/entities/staging-entries.md` (Will be updated to reflect new accepted types).
+
+**Previous Context (List Entries API Enhancement - Still Relevant Foundation):**
+- **List Entries API Enhancement:** Updated the "List Entries" API (`GET /accounts/{accountId}/entries`) to include the status of the associated transaction in the response.
+    - Core logic in `src/server/core/entry/index.js` updated.
+    - Swagger documentation in `src/server/routes/entry/index.js` updated.
+
+**Previous Context (Recon Rule Selection Refinement - Still Relevant Foundation):**
+- **Recon Rule Selection Logic Refinement:** Completed implementation and testing of changes to ensure the Recon Engine selects the correct `ReconRule` based on the `StagingEntryProcessingMode` and the role of the account in the rule.
+    - In `TRANSACTION` mode (generating new expectations), the engine now specifically looks for a rule where `stagingEntry.account_id` is `account_one_id`.
+    - In `CONFIRMATION` mode (fulfilling existing expectations), the engine now specifically looks for a rule where `stagingEntry.account_id` is `account_two_id`.
+- **Testing (Recon Rule):** Unit tests for `src/server/core/recon-engine/engine.js` were updated and passed, confirming the new rule selection logic.
+
+**Previous Context (File Type Processing Modes Feature - Still Relevant Foundation):**
+- **"File Type Processing Modes" Feature:** This feature is foundational to the current changes.
+    - Added `StagingEntryProcessingMode` enum (`CONFIRMATION`, `TRANSACTION`).
+    - Added `processing_mode` to `StagingEntry` model (default `CONFIRMATION`).
+    - Updated Staging Entry creation and file ingestion APIs to handle `processing_mode`.
+    - Recon Engine (`processStagingEntryWithRecon`) branches logic based on `processing_mode`.
 
 **Previous Context (Consumer Polling Interval - Still Relevant):**
 - Recon Engine consumer polling interval is configurable via `RECON_ENGINE_POLL_INTERVAL_MS`, defaulting to 1 second.
-
-**Previous Context (File Ingestion API - Still Relevant):**
-- CSV File Ingestion API for `StagingEntry` creation is complete.
 
 **Next Steps (Broader - carried over, still relevant):**
 -   Consider more complex matching rules for the Recon Engine.

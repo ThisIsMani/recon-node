@@ -1,5 +1,0 @@
-order_id,amount,currency,transaction_date,type
-ORD001,100.50,USD,2025-05-21T10:00:00Z,Payment
-ORD002,75.25,EUR,2025-05-21T10:05:00Z,Payment
-ORD003,25.00,USD,2025-05-21T10:10:00Z,Refund
-ORD008,200.00,USD,2025-05-21T10:35:00Z,Payment

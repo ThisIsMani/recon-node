@@ -25,6 +25,14 @@ const listEntries = async (accountId, queryParams) => {
             account_name: true,
             merchant_id: true
           }
+        },
+        transaction: { // Include the related transaction
+          select: {
+            status: true, // Select the status of the transaction
+            transaction_id: true, // Optionally include transaction_id for reference
+            logical_transaction_id: true, // Optionally include logical_transaction_id
+            version: true // Optionally include version
+          }
         }
       },
       orderBy: {

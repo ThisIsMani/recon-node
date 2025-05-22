@@ -69,6 +69,7 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment', () => {
       }, include: { entries: true },
     });
     const expectedEntry = originalTransaction.entries.find(e => e.status === EntryStatus.EXPECTED && e.account_id === account2.account_id);
+    expect(expectedEntry).toBeDefined();
 
     const fulfillingStagingEntry = await prisma.stagingEntry.create({
       data: { 
@@ -103,9 +104,11 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment', () => {
       data: { merchant_id: merchant.merchant_id, status: TransactionStatus.EXPECTED, logical_transaction_id: `ltid_${orderId}`, entries: { create: [
         { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderId } },
         { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderId } },
-      ]}}
+      ]}},
+      include: { entries: true }
     });
     const expectedEntry = originalTransaction.entries.find(e => e.status === EntryStatus.EXPECTED && e.account_id === account2.account_id);
+    expect(expectedEntry).toBeDefined();
 
     const mismatchStagingEntry = await prisma.stagingEntry.create({
       data: { 
@@ -135,9 +138,11 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment', () => {
       data: { merchant_id: merchant.merchant_id, status: TransactionStatus.EXPECTED, logical_transaction_id: `ltid_${orderId}`, entries: { create: [
         { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderId } },
         { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderId } },
-      ]}}
+      ]}},
+      include: { entries: true }
     });
     const expectedEntry = originalTransaction.entries.find(e => e.status === EntryStatus.EXPECTED && e.account_id === account2.account_id);
+    expect(expectedEntry).toBeDefined();
 
     const mismatchStagingEntry = await prisma.stagingEntry.create({
       data: { 
@@ -164,8 +169,11 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment', () => {
       data: { merchant_id: merchant.merchant_id, status: TransactionStatus.EXPECTED, logical_transaction_id: `ltid_${orderId}`, entries: { create: [
         { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderId } },
         { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderId } },
-      ]}}
+      ]}},
+      include: { entries: true }
     });
+    const expectedEntry = originalTransaction.entries.find(e => e.status === EntryStatus.EXPECTED && e.account_id === account2.account_id);
+    expect(expectedEntry).toBeDefined();
     
     const mismatchStagingEntry = await prisma.stagingEntry.create({
       data: { 

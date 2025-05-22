@@ -147,8 +147,10 @@ async function ingestStagingEntriesFromFile(accountId, file, processingMode) { /
             currentErrors.push(`Invalid transaction_date: '${data.transaction_date}' is not a valid date.`);
           }
         }
-        if (data.type && !['Payment', 'Refund'].includes(data.type)) {
-          currentErrors.push(`Invalid type: '${data.type}'. Must be 'Payment' or 'Refund'.`);
+        // Updated type validation to include DEBIT and CREDIT, removing CHARGEBACK
+        const upperCaseType = data.type ? String(data.type).toUpperCase() : "";
+        if (data.type && !['PAYMENT', 'REFUND', 'DEBIT', 'CREDIT'].includes(upperCaseType)) {
+          currentErrors.push(`Invalid type: '${data.type}'. Must be 'Payment', 'Refund', 'Debit', or 'Credit'.`);
         }
 
         if (currentErrors.length > 0) {
@@ -160,24 +162,31 @@ async function ingestStagingEntriesFromFile(accountId, file, processingMode) { /
           failedIngestions++;
         } else {
           // Step 7: Determine EntryType (DEBIT/CREDIT)
-          let determinedPrismaEntryType; // Use Prisma's EntryType enum
-          if (account.account_type === AccountType.DEBIT_NORMAL) {
-            if (data.type === 'Payment') {
-              determinedPrismaEntryType = EntryType.DEBIT;
-            } else if (data.type === 'Refund') {
-              determinedPrismaEntryType = EntryType.CREDIT;
-            }
-          } else if (account.account_type === AccountType.CREDIT_NORMAL) {
-            if (data.type === 'Payment') {
-              determinedPrismaEntryType = EntryType.CREDIT;
-            } else if (data.type === 'Refund') {
-              determinedPrismaEntryType = EntryType.DEBIT;
+          let determinedPrismaEntryType;
+          const csvTypeUpperCase = String(data.type).toUpperCase();
+
+          if (csvTypeUpperCase === 'DEBIT') {
+            determinedPrismaEntryType = EntryType.DEBIT;
+          } else if (csvTypeUpperCase === 'CREDIT') {
+            determinedPrismaEntryType = EntryType.CREDIT;
+          } else {
+            // Fallback to existing logic for 'Payment', 'Refund'
+            if (account.account_type === AccountType.DEBIT_NORMAL) {
+              if (csvTypeUpperCase === 'PAYMENT') {
+                determinedPrismaEntryType = EntryType.DEBIT;
+              } else if (csvTypeUpperCase === 'REFUND') {
+                determinedPrismaEntryType = EntryType.CREDIT;
+              }
+            } else if (account.account_type === AccountType.CREDIT_NORMAL) {
+              if (csvTypeUpperCase === 'PAYMENT') {
+                determinedPrismaEntryType = EntryType.CREDIT;
+              } else if (csvTypeUpperCase === 'REFUND') {
+                determinedPrismaEntryType = EntryType.DEBIT;
+              }
             }
           }
 
           if (!determinedPrismaEntryType) {
-            // This case should ideally not be hit if 'type' validation (Payment/Refund) is done
-            // and account.account_type is always DEBIT/CREDIT.
             errors.push({
               row_number: rowNumber,
               error_details: `Could not determine EntryType for CSV type '${data.type}' and account type '${account.account_type}'.`,

@@ -29,28 +29,23 @@ async function generateTransactionEntriesFromStaging(stagingEntry, merchantId) {
     },
   };
 
+  // In TRANSACTION mode (which primarily uses this function to generate new expectations),
+  // the stagingEntry.account_id is the source of the transaction, so it should be account_one_id in the rule.
   const reconRule = await prisma.reconRule.findFirst({
     where: {
       merchant_id: merchantId,
-      OR: [
-        { account_one_id: stagingEntry.account_id },
-        { account_two_id: stagingEntry.account_id },
-      ],
+      account_one_id: stagingEntry.account_id, // Explicitly staging account is account_one
     },
   });
 
   if (!reconRule) {
     throw new NoReconRuleFoundError(
-      `No reconciliation rule found for merchant ${merchantId} and account ${stagingEntry.account_id}`
+      `No reconciliation rule found for merchant ${merchantId} where account ${stagingEntry.account_id} is account_one_id (for generating transaction entries)`
     );
   }
 
-  let contra_account_id;
-  if (reconRule.account_one_id === stagingEntry.account_id) {
-    contra_account_id = reconRule.account_two_id;
-  } else {
-    contra_account_id = reconRule.account_one_id;
-  }
+  // Given the query above, contra_account_id will always be account_two_id from the rule.
+  let contra_account_id = reconRule.account_two_id;
 
   const expectedEntryType = stagingEntry.entry_type === EntryType.DEBIT ? EntryType.CREDIT : EntryType.DEBIT;
 
@@ -62,7 +57,8 @@ async function generateTransactionEntriesFromStaging(stagingEntry, merchantId) {
     status: EntryStatus.EXPECTED,
     effective_date: stagingEntry.effective_date,
     metadata: {
-      order_id: order_id,
+      ...(stagingEntry.metadata || {}), // Ensure all original metadata is carried over
+      order_id: order_id, // Explicitly set/override order_id
       source_staging_entry_id: stagingEntry.staging_entry_id,
       recon_rule_id: reconRule.id,
     },
@@ -95,21 +91,20 @@ async function processStagingEntryWithRecon(stagingEntry, merchantId) {
       const orderId = stagingEntry.metadata?.order_id;
       let attemptMatchLogic = false; // Renamed from attemptMatch to avoid conflict
 
+      // In CONFIRMATION mode, the stagingEntry.account_id is where we expect to fulfill an EXPECTED entry.
+      // So, this account should be account_two_id in a relevant ReconRule.
       const reconRule = await prisma.reconRule.findFirst({
         where: {
           merchant_id: merchantId,
-          OR: [
-            { account_one_id: stagingEntry.account_id },
-            { account_two_id: stagingEntry.account_id },
-          ],
+          account_two_id: stagingEntry.account_id, // Explicitly staging account is account_two
         },
       });
 
-      if (reconRule && reconRule.account_two_id === stagingEntry.account_id && orderId) {
+      if (reconRule && orderId) { // If such a rule exists, and we have an orderId, then attempt match.
         attemptMatchLogic = true;
-        logger.info(`[ReconEngine] CONFIRMATION mode: ReconRule found. StagingEntry account ${stagingEntry.account_id} is account_two_id. Attempting match for order_id: ${orderId}.`);
+        logger.info(`[ReconEngine] CONFIRMATION mode: ReconRule found (ID: ${reconRule.id}). StagingEntry account ${stagingEntry.account_id} is account_two_id. Attempting match for order_id: ${orderId}.`);
       } else {
-        logger.info(`[ReconEngine] CONFIRMATION mode: Conditions for match attempt not met (Rule: ${reconRule ? reconRule.id : 'none'}, Staging Acc: ${stagingEntry.account_id}, Order ID: ${orderId}). Skipping direct match attempt.`);
+        logger.info(`[ReconEngine] CONFIRMATION mode: Conditions for match attempt not met (Rule: ${reconRule ? 'none (no rule where staging account is account_two)' : 'none'}, Staging Acc: ${stagingEntry.account_id}, Order ID: ${orderId}). Skipping direct match attempt.`);
       }
       
       let matchedExpectedEntry = null;

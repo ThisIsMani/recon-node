@@ -136,6 +136,7 @@ describe('Staging Entry API Endpoints', () => {
             amount: 100.50,
             currency: 'USD',
             effective_date: new Date().toISOString(),
+            processing_mode: 'CONFIRMATION', // Add valid processing_mode
         };
         const response = await request(app)
           .post(`/api/accounts/${account.account_id}/staging-entries`)
@@ -163,10 +164,10 @@ describe('Staging Entry API Endpoints', () => {
 
     beforeEach(async () => {
         // Entries for 'account'
-        await stagingEntryCore.createStagingEntry(account.account_id, { entry_type: 'CREDIT', amount: 50, currency: 'USD', effective_date: new Date() });
-        await stagingEntryCore.createStagingEntry(account.account_id, { entry_type: 'DEBIT', amount: 25, currency: 'USD', effective_date: new Date() });
+        await stagingEntryCore.createStagingEntry(account.account_id, { entry_type: 'CREDIT', amount: 50, currency: 'USD', effective_date: new Date(), processing_mode: 'CONFIRMATION' });
+        await stagingEntryCore.createStagingEntry(account.account_id, { entry_type: 'DEBIT', amount: 25, currency: 'USD', effective_date: new Date(), processing_mode: 'TRANSACTION' });
         // Entry for 'otherAccount' to test filtering by account_id in path
-        await stagingEntryCore.createStagingEntry(otherAccount.account_id, { entry_type: 'DEBIT', amount: 75, currency: 'EUR', effective_date: new Date() });
+        await stagingEntryCore.createStagingEntry(otherAccount.account_id, { entry_type: 'DEBIT', amount: 75, currency: 'EUR', effective_date: new Date(), processing_mode: 'CONFIRMATION' });
     });
 
     it('should list all staging entries for the specified account_id', async () => {
@@ -255,7 +256,7 @@ describe('Staging Entry API Endpoints', () => {
       expect(errorRow4.error_details).toContain("Invalid transaction_date: 'invalid-date' is not a valid date.");
       
       const errorRow5 = response.body.errors.find(e => e.row_number === 5); // Invalid type
-      expect(errorRow5.error_details).toContain("Invalid type: 'InvalidType'. Must be 'Payment' or 'Refund'.");
+      expect(errorRow5.error_details).toContain("Invalid type: 'InvalidType'. Must be 'Payment', 'Refund', 'Debit', or 'Credit'.");
 
       const stagingEntries = await prisma.stagingEntry.findMany({ where: { account_id: account.account_id } });
       expect(stagingEntries.length).toBe(1); // Only one should be created
@@ -277,8 +278,8 @@ describe('Staging Entry API Endpoints', () => {
         expect(response.body.errors[0].row_number).toBe(1);
         expect(response.body.errors[0].error_details).toContain("Invalid amount: 'xyz' is not a number.");
         expect(response.body.errors[0].error_details).toContain("Invalid transaction_date: 'baddate' is not a valid date.");
-        expect(response.body.errors[0].error_details).toContain("Invalid type: 'FakePayment'. Must be 'Payment' or 'Refund'.");
-  
+        expect(response.body.errors[0].error_details).toContain("Invalid type: 'FakePayment'. Must be 'Payment', 'Refund', 'Debit', or 'Credit'.");
+
         const stagingEntries = await prisma.stagingEntry.findMany({ where: { account_id: account.account_id } });
         expect(stagingEntries.length).toBe(0);
       });

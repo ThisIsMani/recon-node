@@ -104,14 +104,20 @@ model ReconRule {
 **Purpose & Future Implications:**
 
 - These rules form the basis for the 'recon engine'.
-- **Implied Roles & Conditional Matching:**
-    - By convention, `account_one_id` is typically considered the "source" or "initiating" account in a transaction pair that generates an expectation.
-    - `account_two_id` is typically considered the "destination" or "expecting" account, where an `EXPECTED` entry would be lodged, awaiting fulfillment.
-    - The Recon Engine uses this convention: it will only attempt to match an incoming `StagingEntry` against existing `EXPECTED` entries if the `StagingEntry.account_id` corresponds to `account_two_id` in an active `ReconRule`. If the `StagingEntry.account_id` is `account_one_id`, or if no rule exists, a match attempt is bypassed, and the staging entry is typically flagged for manual review.
-- When an event occurs related to `account_one_id` (e.g., a payment processed), and a `ReconRule` exists, the system (historically, or in future designs for auto-expectation generation) might automatically generate an 'expected entry' for the corresponding `account_two_id` with matching `order_id`, `amount`, and `currency`.
+- **Rule Usage by Recon Engine (Based on `StagingEntryProcessingMode`):**
+    - **`TRANSACTION` Mode (Generating new expectations):**
+        - When a `StagingEntry` is processed in `TRANSACTION` mode (e.g., a PSP transaction file indicating funds moved from a PSP holding account), its `account_id` is treated as the "source" or "initiating" account.
+        - The Recon Engine's `generateTransactionEntriesFromStaging` function will look for a `ReconRule` where `account_one_id` matches the `stagingEntry.account_id`.
+        - If found, an `EXPECTED` entry is created for the `account_two_id` of that rule (e.g., a Bank account).
+    - **`CONFIRMATION` Mode (Fulfilling existing expectations):**
+        - When a `StagingEntry` is processed in `CONFIRMATION` mode (e.g., a bank statement entry), its `account_id` is treated as the "destination" or "expecting" account where a previously created `EXPECTED` entry should exist.
+        - The Recon Engine's `processStagingEntryWithRecon` function will look for a `ReconRule` where `account_two_id` matches the `stagingEntry.account_id`.
+        - If such a rule is found (and an `order_id` is present), the engine will attempt to find and match an existing `EXPECTED` entry in that `stagingEntry.account_id`.
+- If multiple rules could potentially apply to an account, the refined logic ensures the rule matching the account's role (source for `TRANSACTION` mode, destination for `CONFIRMATION` mode) is selected.
 - Rules are scoped to merchants, ensuring proper data isolation.
-- The system can use these rules to:
-  - Conditionally attempt to match `StagingEntry` records with `EXPECTED` entries.
+- The system uses these rules to:
+  - Determine the correct contra-account for generating `EXPECTED` entries.
+  - Conditionally attempt to match incoming `StagingEntry` records with existing `EXPECTED` entries.
   - Track expected vs actual entries.
   - Identify reconciliation mismatches.
   - Automate parts of the reconciliation process.

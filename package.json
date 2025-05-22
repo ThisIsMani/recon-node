@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node src/server.js",
     "start:consumer": "node src/recon-engine-runner.js",
-    "test": "cross-env NODE_ENV=test jest --detectOpenHandles"
+    "test": "cross-env NODE_ENV=test jest --detectOpenHandles",
+    "db:reset": "npx prisma migrate reset"
   },
   "keywords": [],
   "author": "",

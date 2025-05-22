@@ -1,90 +1,91 @@
 # Entity: Recon Engine
 
-**Purpose:** The Recon Engine is a core component responsible for processing `StagingEntry` objects. It first attempts to match a `StagingEntry` against existing `EXPECTED` entries. If a match is found and validated, it proceeds to fulfill the expectation by archiving the original transaction and creating a new, evolved transaction (Phase 2). If no match is found, or if a match is invalid (mismatch), it applies reconciliation rules (`ReconRule`) to generate data for actual and expected ledger entries, and then orchestrates the creation of a new `Transaction` with these entries. It also handles specific errors by updating the `StagingEntry` status.
+The Recon Engine is the core component responsible for processing `StagingEntry` records, attempting to match them against existing expectations or generating new transactions.
 
-**Key Functions/Modules:**
+## Core Functions
 
--   **`src/server/core/recon-engine/engine.js`**:
-    -   `async function generateTransactionEntriesFromStaging(stagingEntry, merchantId)`:
-        -   Takes a staging entry and merchant ID.
-        -   Looks up the relevant `ReconRule`.
-        -   Produces data for two `Entry` objects (one actual with status `POSTED`, one expected with status `EXPECTED`).
-        -   Throws `NoReconRuleFoundError` if a rule cannot be found.
-    -   `async function processStagingEntryWithRecon(stagingEntry, merchantId)`:
-        -   This is the main orchestrator function called by the consumer.
-        -   **Conditional Matching Logic:**
-            -   First, fetches the `ReconRule` for the `stagingEntry.account_id` and `merchantId`.
-            -   A match against existing `EXPECTED` entries is **only attempted if** a `ReconRule` exists AND the `stagingEntry.account_id` is `reconRule.account_two_id`. This convention assumes `account_two_id` is the "destination" or "expecting" account.
-            -   If these conditions are not met (no rule, or `stagingEntry.account_id` is `reconRule.account_one_id`), the engine skips the matching attempt and proceeds as if no match was found (throws `NoMatchFoundError`, sets `StagingEntry` to `NEEDS_MANUAL_REVIEW`).
-        -   **Matching & Validation Logic (Phase 1 & 2 - if match attempt is warranted):**
-            -   If a match attempt is warranted and `stagingEntry.metadata.order_id` is present, it attempts to find a unique, existing `EXPECTED` entry.
-            -   **If a unique match is found (`matchedExpectedEntry` and `originalTransaction`):**
-                -   Validates the `amount`, `currency`, and `entry_type` of the `stagingEntry` against the `matchedExpectedEntry`.
-                -   **If valid match (Phase 2 Fulfillment):**
-                    -   Atomically (using `prisma.$transaction`):
-                        -   Archives the `originalTransaction` (status `ARCHIVED`, `discarded_at` set). Also, all `Entry` records belonging to this `originalTransaction` have their status updated to `EntryStatus.ARCHIVED` and their `discarded_at` field set.
-                        -   Prepares data for a new evolved transaction:
-                            -   `logical_transaction_id`: same as `originalTransaction`.
-                            -   `version`: `originalTransaction.version + 1`.
-                            -   `status`: `TransactionStatus.POSTED`.
-                            -   `metadata`: includes `source_staging_entry_id`, `evolved_from_transaction_id`, `fulfilled_expected_entry_id`.
-                        -   Prepares data for two new `POSTED` entries for the evolved transaction:
-                            1.  One entry derived from the current `stagingEntry`.
-                            2.  One entry derived from the original `POSTED` leg of the `originalTransaction`.
-                        -   Calls `transactionCore.createTransactionInternal` to create the new evolved transaction and its entries.
-                        -   Updates the `stagingEntry.status` to `PROCESSED`, sets `stagingEntry.discarded_at` to the current timestamp, and updates its metadata with `evolved_transaction_id` and `match_type: 'Phase2_Fulfilled'`.
-                    -   Returns the `newEvolvedTransaction`.
-                -   **If invalid match (mismatch):**
-                    -   Atomically updates the `originalTransaction.status` to `MISMATCH`.
-                    -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW` (without setting `discarded_at`), and adds error details in metadata.
-                    -   Throws an error (`Mismatch detected...`).
-            -   **If multiple matches are found (ambiguous match):**
-                -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW` (without setting `discarded_at`), and adds error details.
-                -   Throws an error (`Ambiguous match...`).
-            -   **If no match is found:**
-                -   Updates `stagingEntry.status` to `NEEDS_MANUAL_REVIEW` (without setting `discarded_at`), and adds error details.
-                -   Throws a `NoMatchFoundError`. (Does not proceed to generate new transaction).
-        -   **Error Handling (General):**
-            -   The main `catch` block in `processStagingEntryWithRecon` handles errors.
-            -   If errors like `NoReconRuleFoundError` or `BalanceError` (which could occur if a different part of the logic *did* attempt transaction creation, though not the "no match" path currently) are caught, or if `NoMatchFoundError`, `MismatchError`, `AmbiguousMatchError` are caught, it ensures the `StagingEntry` status is `NEEDS_MANUAL_REVIEW` (without setting `discarded_at`).
-            -   For other unexpected errors, it also updates `StagingEntry` to `NEEDS_MANUAL_REVIEW` (without `discarded_at`).
+-   **`generateTransactionEntriesFromStaging(stagingEntry, merchantId)`** (`src/server/core/recon-engine/engine.js`)
+    -   Takes a `StagingEntry` and `merchantId`.
+    -   **Rule Selection:** Finds an applicable `ReconRule` where `merchant_id` matches and `stagingEntry.account_id` matches `account_one_id` in the rule. This assumes that for generating new transaction pairs (typical in `TRANSACTION` mode), the `stagingEntry.account_id` represents the source/initiating account.
+        -   Throws `NoReconRuleFoundError` if no such rule applies (e.g., `No reconciliation rule found for merchant X where account Y is account_one_id...`).
+    -   Determines the `contra_account_id` (which will be `account_two_id` from the selected rule) and `expectedEntryType` based on the rule and the staging entry.
+    -   Constructs data for two entries:
+        1.  **Actual Entry**: Status `POSTED`, based directly on `stagingEntry` details. Metadata includes a spread of `stagingEntry.metadata`, `order_id` (from `stagingEntry.metadata`), and `source_staging_entry_id`.
+        2.  **Expected Entry**: Status `EXPECTED` for the `contra_account_id`. Metadata includes a spread of `stagingEntry.metadata`, `order_id` (from `stagingEntry.metadata`), `source_staging_entry_id`, and `recon_rule_id`.
+    -   Returns an array containing these two entry data objects.
 
--   **`src/server/core/recon-engine/consumer.js`**:
-    -   `async function processSingleTask()`:
-        -   Fetches a pending `PROCESS_STAGING_ENTRY` task from `ProcessTracker`.
-        -   Retrieves the `StagingEntry` and `merchantId`.
-        -   Calls `reconEngine.processStagingEntryWithRecon(stagingEntry, merchantId)`.
-        -   If `processStagingEntryWithRecon` is successful (returns a transaction object), updates the `ProcessTracker` task to `COMPLETED`.
-        -   If `processStagingEntryWithRecon` throws any error, updates the `ProcessTracker` task to `FAILED`, storing error details.
-    -   `async function startConsumer()`: Polls for and processes tasks using `processSingleTask`. The polling interval is configurable via the `RECON_ENGINE_POLL_INTERVAL_MS` environment variable, defaulting to 1000ms (1 second).
+-   **`processStagingEntryWithRecon(stagingEntry, merchantId)`** (`src/server/core/recon-engine/engine.js`)
+    -   Orchestrates the processing of a single `StagingEntry`.
+    -   Validates `stagingEntry` and `merchantId`.
+    -   Validates `stagingEntry.processing_mode`. If invalid, updates `StagingEntry` to `NEEDS_MANUAL_REVIEW` and throws an error.
+    -   **Branches based on `stagingEntry.processing_mode`**:
+        -   **`CONFIRMATION` Mode:**
+            -   Logs processing start.
+            -   Determines if a match attempt is warranted:
+                -   **Rule Selection:** A `ReconRule` must exist where `merchant_id` matches and `stagingEntry.account_id` matches `account_two_id` in the rule (implying it's an "expecting" account for fulfillment).
+                -   `stagingEntry.metadata.order_id` must be present.
+            -   If match attempt is warranted (i.e., a suitable rule and `orderId` exist):
+                -   Searches for `EXPECTED` entries matching `stagingEntry.account_id`, `merchantId`, non-terminal transaction status, and `metadata.order_id`.
+                -   If one unique `matchedExpectedEntry` is found:
+                    -   Validates amount, currency, and entry type against `stagingEntry`.
+                    -   If valid:
+                        -   Archives the `originalTransaction` and its entries (sets status to `ARCHIVED`, sets `discarded_at`).
+                        -   Creates a new "evolved" `Transaction` (status `POSTED`, version incremented) using `transactionCore.createTransactionInternal`.
+                            -   The new transaction includes:
+                                1.  A `POSTED` entry based on the `stagingEntry` (fulfilling entry).
+                                2.  A `POSTED` entry carried over from the original transaction's other leg.
+                            -   Metadata for the new transaction and entries includes details like `source_staging_entry_id`, `evolved_from_transaction_id`, `fulfilled_expected_entry_id`, and `derived_from_entry_id`.
+                        -   Updates `StagingEntry` to `PROCESSED`, sets `discarded_at`, and records match details in metadata.
+                        -   Returns the new evolved transaction.
+                    -   If invalid match (amount/currency/type mismatch):
+                        -   Updates `originalTransaction` status to `MISMATCH`.
+                        -   Updates `StagingEntry` to `NEEDS_MANUAL_REVIEW` with mismatch details.
+                        -   Throws a mismatch error.
+                -   If multiple matches found (ambiguous): Updates `StagingEntry` to `NEEDS_MANUAL_REVIEW` and throws an error.
+                -   If no match found (but attempt was made): Proceeds to the "No Match Found" handling.
+            -   If match attempt was NOT warranted OR no match was found after an attempt:
+                -   Updates `StagingEntry` to `NEEDS_MANUAL_REVIEW` with `NoMatchFoundError` details.
+                -   Throws `NoMatchFoundError`.
+        -   **`TRANSACTION` Mode:**
+            -   Logs processing start.
+            -   Calls `generateTransactionEntriesFromStaging` to get data for the actual (POSTED) and expected entries.
+            -   Constructs `transactionShellData` for a new transaction (status `EXPECTED`, `version: 1`). Metadata includes a spread of `stagingEntry.metadata`, `source_staging_entry_id`, and `processing_mode`.
+            -   Calls `transactionCore.createTransactionInternal` to atomically create the new transaction and its two entries.
+            -   Updates `StagingEntry` to `PROCESSED`, sets `discarded_at`, and records `created_transaction_id` in metadata.
+            -   Returns the new transaction.
+    -   **Error Handling:**
+        -   Catches errors during processing (e.g., `NoReconRuleFoundError`, `BalanceError` from `transactionCore`).
+        -   Updates `StagingEntry` to `NEEDS_MANUAL_REVIEW` with error details in metadata.
+        -   Re-throws the error to be handled by the consumer (which updates `ProcessTracker`).
 
-**Data Flow (within `processStagingEntryWithRecon` - Updated for Phase 2):**
-1.  Input: `StagingEntry` object, `merchantId`.
-2.  **Determine if Match Attempt is Warranted:**
-    -   Fetch `ReconRule` for `stagingEntry.account_id` and `merchantId`.
-    -   If (no `ReconRule` OR `stagingEntry.account_id` is not `reconRule.account_two_id` OR `stagingEntry.metadata.order_id` is null):
-        -   Skip to step 4 (No Match Found).
-3.  **Attempt to Match Existing Expected Entry (if warranted):**
-    -   Query for `EXPECTED` entries based on `order_id`, `account_id`, `merchant_id`.
-    -   If **unique match found**:
-        -   Validate `amount`, `currency`, `entry_type`.
-        -   If **valid (Fulfillment Path)**:
-            -   **Atomically:**
-                -   Archive original transaction (status `ARCHIVED`, set `discarded_at`). All its `Entry` records are also updated to `status: EntryStatus.ARCHIVED` and have `discarded_at` set.
-                -   Create new evolved transaction (status `POSTED`, version incremented, same `logical_transaction_id`) with two `POSTED` entries:
-                    -   One from the current `stagingEntry`.
-                    -   One from the other (posted) leg of the original transaction.
-                -   Update `StagingEntry` status to `PROCESSED`, set `discarded_at`, add `evolved_transaction_id` and `match_type: 'Phase2_Fulfilled'` to metadata.
-            -   Return the new evolved transaction.
-        -   If **invalid (mismatch)**:
-            -   Update original `Transaction` status to `MISMATCH`.
-            -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW` (without `discarded_at`), with error details.
-            -   Throw `Error("Mismatch detected...")`. (End of flow)
-    -   If **multiple matches found**:
-        -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW` (without `discarded_at`), with error details.
-        -   Throw `Error("Ambiguous match...")`. (End of flow)
-    -   If **no match found (either from step 2 or step 3)**:
-        -   Update `StagingEntry` status to `NEEDS_MANUAL_REVIEW` (without `discarded_at`), with error details.
-        -   Throw `NoMatchFoundError`. (End of flow - no new transaction generated automatically).
+## Consumer (`src/server/core/recon-engine/consumer.js`)
 
-This component is crucial for automating the creation of balanced, double-entry bookkeeping records. The matching and fulfillment logic aims to accurately evolve transactions when expected payments are realized, maintaining a clear audit trail. Unmatched entries, or entries not designated for matching, are flagged for manual review.
+-   A separate process that polls the `ProcessTracker` table for tasks of type `PROCESS_STAGING_ENTRY` with status `PENDING`.
+-   **`processNextTask()`**:
+    -   Fetches the next pending task.
+    -   Updates task status to `PROCESSING`.
+    -   Retrieves the `StagingEntry` and its associated `Account` (to get `merchant_id`).
+    -   Calls `processStagingEntryWithRecon(stagingEntry, merchantId)`.
+    -   On success, updates task status to `COMPLETED`.
+    -   On failure (error from `processStagingEntryWithRecon`), updates task status to `FAILED` and logs the error.
+-   **`start()`**: Initiates polling loop using `setInterval` based on `RECON_ENGINE_POLL_INTERVAL_MS` from config.
+
+## Key Concepts
+
+-   **Rule Selection Logic:**
+    -   In **`TRANSACTION` mode** (typically when `generateTransactionEntriesFromStaging` is used to create new expectations): The engine looks for a `ReconRule` where the `stagingEntry.account_id` is `account_one_id` (the source/initiating account). The `EXPECTED` entry is then created for `account_two_id`.
+    -   In **`CONFIRMATION` mode** (when `processStagingEntryWithRecon` attempts to match an existing expectation): The engine looks for a `ReconRule` where the `stagingEntry.account_id` is `account_two_id` (the destination/expecting account).
+-   **Conditional Matching (CONFIRMATION mode):** The engine only attempts to match/fulfill if the `stagingEntry.account_id` corresponds to `account_two_id` in an applicable `ReconRule` (i.e., it's an "expecting" account) and the `stagingEntry` has an `order_id`.
+-   **Transaction Evolution (CONFIRMATION mode):** When an expected entry is fulfilled, its original transaction is archived, and a new, evolved transaction (incremented version, status `POSTED`) is created, linking back to the original.
+-   **Direct Transaction Creation (TRANSACTION mode):** Utilizes `generateTransactionEntriesFromStaging` (which now specifically uses `account_one_id` from the rule) to form a new transaction with one `POSTED` leg (from staging entry) and one `EXPECTED` leg.
+-   **Atomicity:** Uses `prisma.$transaction` for operations that must succeed or fail together (e.g., creating/updating transactions and entries, updating staging entry status).
+-   **Error States:** `StagingEntry` records are moved to `NEEDS_MANUAL_REVIEW` upon any processing error, with error details stored in their metadata.
+-   **Idempotency (via Process Tracker):** The consumer attempts to ensure tasks are processed once by updating task statuses. (Further enhancements for strict idempotency might be needed for retries on transient errors).
+
+## Related Entities
+
+-   `StagingEntry`: The input to the Recon Engine.
+-   `ReconRule`: Used to determine contra-accounts and expected behavior.
+-   `Transaction`: Created or updated by the engine.
+-   `Entry`: Created as part of transactions.
+-   `ProcessTracker`: Manages asynchronous processing tasks for the engine.
