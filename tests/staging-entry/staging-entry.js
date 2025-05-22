@@ -35,13 +35,14 @@ describe('Staging Entry API Endpoints', () => {
   });
 
   describe('POST /api/staging-entries', () => {
-    it('should create a new staging entry successfully without discarded_at', async () => {
+    it('should create a new staging entry successfully with processing_mode CONFIRMATION', async () => {
       const entryData = {
         account_id: account.account_id,
         entry_type: 'DEBIT',
         amount: 100.50,
         currency: 'USD',
         effective_date: new Date().toISOString(),
+        processing_mode: 'CONFIRMATION',
         metadata: { source: 'test' }
       };
       const response = await request(app)
@@ -49,12 +50,13 @@ describe('Staging Entry API Endpoints', () => {
         .send(entryData);
       expect(response.statusCode).toBe(201);
       expect(response.body).toHaveProperty('staging_entry_id');
-      expect(response.body.status).toBe('NEEDS_MANUAL_REVIEW');
+      expect(response.body.status).toBe('PENDING');
+      expect(response.body.processing_mode).toBe('CONFIRMATION');
       expect(response.body.amount.toString()).toBe('100.5');
       expect(response.body.discarded_at).toBeNull();
     });
 
-    it('should create a new staging entry successfully with discarded_at', async () => {
+    it('should create a new staging entry successfully with processing_mode TRANSACTION and discarded_at', async () => {
       const discardedDate = new Date().toISOString();
       const entryData = {
         account_id: account.account_id,
@@ -62,6 +64,7 @@ describe('Staging Entry API Endpoints', () => {
         amount: 200.00,
         currency: 'EUR',
         effective_date: new Date().toISOString(),
+        processing_mode: 'TRANSACTION',
         metadata: { reason: 'duplicate' },
         discarded_at: discardedDate
       };
@@ -69,11 +72,51 @@ describe('Staging Entry API Endpoints', () => {
         .post(`/api/accounts/${account.account_id}/staging-entries`)
         .send(entryData);
       expect(response.statusCode).toBe(201);
+      expect(response.body.processing_mode).toBe('TRANSACTION');
       expect(response.body.discarded_at).toBe(discardedDate);
     });
 
-    it('should return 400 for missing required fields in body', async () => {
-        const entryData = { entry_type: 'DEBIT', amount: 100 };
+    it('should return 400 for missing processing_mode in body', async () => {
+        const entryData = { 
+            account_id: account.account_id,
+            entry_type: 'DEBIT', 
+            amount: 100, 
+            currency: 'USD',
+            effective_date: new Date().toISOString(),
+        }; // processing_mode is missing
+        const response = await request(app)
+          .post(`/api/accounts/${account.account_id}/staging-entries`)
+          .send(entryData);
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toContain('Invalid or missing processing_mode');
+    });
+    
+    it('should return 400 for invalid processing_mode in body', async () => {
+      const entryData = {
+        account_id: account.account_id,
+        entry_type: 'DEBIT',
+        amount: 100.50,
+        currency: 'USD',
+        effective_date: new Date().toISOString(),
+        processing_mode: 'INVALID_MODE', 
+        metadata: { source: 'test' }
+      };
+      const response = await request(app)
+        .post(`/api/accounts/${account.account_id}/staging-entries`)
+        .send(entryData);
+      expect(response.statusCode).toBe(400);
+      expect(response.body.error).toContain('Invalid or missing processing_mode');
+    });
+
+    it('should return 400 for missing other required fields in body (e.g. amount)', async () => {
+        const entryData = { 
+            account_id: account.account_id,
+            entry_type: 'DEBIT', 
+            // amount: 100, // amount is missing
+            currency: 'USD',
+            effective_date: new Date().toISOString(),
+            processing_mode: 'CONFIRMATION',
+        };
         const response = await request(app)
           .post(`/api/accounts/${account.account_id}/staging-entries`)
           .send(entryData);
@@ -93,6 +136,7 @@ describe('Staging Entry API Endpoints', () => {
             amount: 100.50,
             currency: 'USD',
             effective_date: new Date().toISOString(),
+            processing_mode: 'CONFIRMATION', // Add valid processing_mode
         };
         const response = await request(app)
           .post(`/api/accounts/${account.account_id}/staging-entries`)
@@ -120,10 +164,10 @@ describe('Staging Entry API Endpoints', () => {
 
     beforeEach(async () => {
         // Entries for 'account'
-        await stagingEntryCore.createStagingEntry(account.account_id, { entry_type: 'CREDIT', amount: 50, currency: 'USD', effective_date: new Date() });
-        await stagingEntryCore.createStagingEntry(account.account_id, { entry_type: 'DEBIT', amount: 25, currency: 'USD', effective_date: new Date() });
+        await stagingEntryCore.createStagingEntry(account.account_id, { entry_type: 'CREDIT', amount: 50, currency: 'USD', effective_date: new Date(), processing_mode: 'CONFIRMATION' });
+        await stagingEntryCore.createStagingEntry(account.account_id, { entry_type: 'DEBIT', amount: 25, currency: 'USD', effective_date: new Date(), processing_mode: 'TRANSACTION' });
         // Entry for 'otherAccount' to test filtering by account_id in path
-        await stagingEntryCore.createStagingEntry(otherAccount.account_id, { entry_type: 'DEBIT', amount: 75, currency: 'EUR', effective_date: new Date() });
+        await stagingEntryCore.createStagingEntry(otherAccount.account_id, { entry_type: 'DEBIT', amount: 75, currency: 'EUR', effective_date: new Date(), processing_mode: 'CONFIRMATION' });
     });
 
     it('should list all staging entries for the specified account_id', async () => {
@@ -164,9 +208,10 @@ describe('Staging Entry API Endpoints', () => {
     const onlyInvalidCsvData = `order_id,amount,currency,transaction_date,type\norder8,xyz,USD,baddate,FakePayment`;
 
 
-    it('should successfully ingest a valid CSV file', async () => {
+    it('should successfully ingest a valid CSV file with processing_mode CONFIRMATION', async () => {
       const response = await request(app)
         .post(`/api/accounts/${account.account_id}/staging-entries/files`)
+        .field('processing_mode', 'CONFIRMATION')
         .attach('file', Buffer.from(validCsvData), 'test.csv');
 
       expect(response.statusCode).toBe(200);
@@ -181,14 +226,17 @@ describe('Staging Entry API Endpoints', () => {
       const paymentEntry = stagingEntries.find(e => e.metadata.order_id === 'order1');
       expect(paymentEntry.entry_type).toBe('DEBIT');
       expect(paymentEntry.amount.toString()).toBe('100');
+      expect(paymentEntry.processing_mode).toBe('CONFIRMATION');
       const refundEntry = stagingEntries.find(e => e.metadata.order_id === 'order2');
       expect(refundEntry.entry_type).toBe('CREDIT');
       expect(refundEntry.amount.toString()).toBe('50');
+      expect(refundEntry.processing_mode).toBe('CONFIRMATION');
     });
 
-    it('should process a CSV with mixed valid and invalid rows (207 Multi-Status)', async () => {
+    it('should process a CSV with mixed valid and invalid rows (207 Multi-Status) with processing_mode TRANSACTION', async () => {
       const response = await request(app)
         .post(`/api/accounts/${account.account_id}/staging-entries/files`)
+        .field('processing_mode', 'TRANSACTION')
         .attach('file', Buffer.from(mixedCsvData), 'mixed.csv');
       
       expect(response.statusCode).toBe(207);
@@ -208,19 +256,21 @@ describe('Staging Entry API Endpoints', () => {
       expect(errorRow4.error_details).toContain("Invalid transaction_date: 'invalid-date' is not a valid date.");
       
       const errorRow5 = response.body.errors.find(e => e.row_number === 5); // Invalid type
-      expect(errorRow5.error_details).toContain("Invalid type: 'InvalidType'. Must be 'Payment' or 'Refund'.");
+      expect(errorRow5.error_details).toContain("Invalid type: 'InvalidType'. Must be 'Payment', 'Refund', 'Debit', or 'Credit'.");
 
       const stagingEntries = await prisma.stagingEntry.findMany({ where: { account_id: account.account_id } });
       expect(stagingEntries.length).toBe(1); // Only one should be created
       expect(stagingEntries[0].metadata.order_id).toBe('order3');
+      expect(stagingEntries[0].processing_mode).toBe('TRANSACTION');
     });
 
-    it('should return 207 if all rows in CSV are invalid', async () => {
+    it('should return 207 if all rows in CSV are invalid (processing_mode provided)', async () => {
         const response = await request(app)
           .post(`/api/accounts/${account.account_id}/staging-entries/files`)
+          .field('processing_mode', 'CONFIRMATION')
           .attach('file', Buffer.from(onlyInvalidCsvData), 'all_invalid.csv');
   
-        expect(response.statusCode).toBe(207); // As per current route logic
+        expect(response.statusCode).toBe(207); 
         expect(response.body.message).toBe('File processing complete.');
         expect(response.body.successful_ingestions).toBe(0);
         expect(response.body.failed_ingestions).toBe(1);
@@ -228,32 +278,42 @@ describe('Staging Entry API Endpoints', () => {
         expect(response.body.errors[0].row_number).toBe(1);
         expect(response.body.errors[0].error_details).toContain("Invalid amount: 'xyz' is not a number.");
         expect(response.body.errors[0].error_details).toContain("Invalid transaction_date: 'baddate' is not a valid date.");
-        expect(response.body.errors[0].error_details).toContain("Invalid type: 'FakePayment'. Must be 'Payment' or 'Refund'.");
-  
+        expect(response.body.errors[0].error_details).toContain("Invalid type: 'FakePayment'. Must be 'Payment', 'Refund', 'Debit', or 'Credit'.");
+
         const stagingEntries = await prisma.stagingEntry.findMany({ where: { account_id: account.account_id } });
         expect(stagingEntries.length).toBe(0);
       });
 
     it('should return 400 if no file is uploaded', async () => {
       const response = await request(app)
-        .post(`/api/accounts/${account.account_id}/staging-entries/files`);
-      // Not sending .attach or .field
+        .post(`/api/accounts/${account.account_id}/staging-entries/files`)
+        .field('processing_mode', 'CONFIRMATION'); // Send processing_mode but no file
       expect(response.statusCode).toBe(400);
       expect(response.body.error).toBe('No file uploaded.');
     });
 
-    it('should return 400 for non-CSV file type', async () => {
+    it('should return 400 if processing_mode is missing for file upload', async () => {
       const response = await request(app)
         .post(`/api/accounts/${account.account_id}/staging-entries/files`)
+        .attach('file', Buffer.from(validCsvData), 'test.csv'); // No processing_mode field
+      expect(response.statusCode).toBe(400);
+      expect(response.body.error).toContain('Invalid or missing processing_mode form field');
+    });
+
+    it('should return 400 for non-CSV file type (with processing_mode)', async () => {
+      const response = await request(app)
+        .post(`/api/accounts/${account.account_id}/staging-entries/files`)
+        .field('processing_mode', 'TRANSACTION')
         .attach('file', Buffer.from('this is not a csv'), 'test.txt');
       
       expect(response.statusCode).toBe(400);
       expect(response.body.error).toBe('Invalid file type. Only CSV files are allowed.');
     });
 
-    it('should return 404 if account_id does not exist', async () => {
+    it('should return 404 if account_id does not exist (with processing_mode)', async () => {
       const response = await request(app)
         .post(`/api/accounts/non_existent_account_id_123/staging-entries/files`)
+        .field('processing_mode', 'CONFIRMATION')
         .attach('file', Buffer.from(validCsvData), 'test.csv');
       
       expect(response.statusCode).toBe(404);

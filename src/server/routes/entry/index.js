@@ -39,7 +39,24 @@ const router = express.Router({ mergeParams: true });
  *             schema:
  *               type: array
  *               items:
- *                 $ref: '#/components/schemas/Entry'
+ *                 allOf: # Combine Entry schema with the new transaction details
+ *                   - $ref: '#/components/schemas/Entry'
+ *                   - type: object
+ *                     properties:
+ *                       transaction:
+ *                         type: object
+ *                         properties:
+ *                           transaction_id:
+ *                             type: string
+ *                             description: The ID of the transaction this entry belongs to.
+ *                           status:
+ *                             $ref: '#/components/schemas/TransactionStatusEnum' # Assuming you have this defined
+ *                           logical_transaction_id:
+ *                             type: string
+ *                             nullable: true
+ *                           version:
+ *                              type: integer
+ *                         description: Details of the transaction associated with the entry.
  *       404:
  *         description: Account not found.
  *         content:

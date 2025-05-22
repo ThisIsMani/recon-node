@@ -42,10 +42,11 @@ model Entry {
 
 **API Endpoints:**
 - `GET /api/accounts/:account_id/entries`: List entries for the specified account. Supports filtering by `status` (e.g., `EXPECTED`, `POSTED`, `ARCHIVED`) via query parameters.
+  - **Response Update:** The API response now includes details of the associated `transaction` for each entry, including `transaction.status`, `transaction.transaction_id`, `transaction.logical_transaction_id`, and `transaction.version`.
   - **Note:** There is no `POST` endpoint for creating entries directly via the API. Entries are created through internal system processes and *must* be associated with a transaction.
 
 **Core Logic (`src/server/core/entry/index.js`):**
-- `listEntries(account_id, queryParams)`: Retrieves entries for a given account, allowing filtering by status. Includes related account details.
+- `listEntries(account_id, queryParams)`: Retrieves entries for a given account, allowing filtering by status. Includes related account details and now also includes associated transaction details (status, ID, logical ID, version).
 - `createEntryInternal(entryData, tx?)`: (Internal function) Creates a single entry. Accepts an optional Prisma transaction client (`tx`) to participate in an ongoing database transaction. This is used by `transactionCore.createTransactionInternal`.
 
 **Lifecycle & Purpose:**
@@ -60,7 +61,7 @@ model Entry {
 - `ARCHIVED`:
     - An entry that is no longer active, typically because it is part of an `ARCHIVED` transaction.
     - This occurs when a transaction is superseded by a newer version (due to fulfillment of an expectation or a manual correction).
-    - The `discarded_at` field on the parent `Transaction` should be populated. Individual entries themselves might not have `discarded_at` directly, as their archival is tied to the transaction's archival. (Note: The schema has `discarded_at` on `Entry` but current logic archives at the `Transaction` level).
+    - When a transaction is archived, its constituent entries also have their status updated to `ARCHIVED` and their `discarded_at` field is set.
 
 **Relationship with Transactions:**
 - An `Entry` *must* always belong to exactly one `Transaction`.
