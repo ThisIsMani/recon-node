@@ -1,44 +1,43 @@
-# Active Context: Smart Ledger Backend (Node.js) - Refined File Ingestion Types
+# Active Context: Smart Ledger Backend (Node.js) - Account Name Update Feature
 
 **Current Focus:**
-- **File Ingestion API Refinement:** Updated the file ingestion logic (`ingestStagingEntriesFromFile` in `src/server/core/staging-entry/index.js`) to accept "DEBIT" or "CREDIT" (case-insensitive) as transaction types from CSV files. 'Chargeback' has been removed as a directly accepted CSV type for ingestion, simplifying the accepted types to 'Payment', 'Refund', 'DEBIT', and 'CREDIT'.
-- **Testing:** No direct unit tests were run for this specific change. Manual verification or API-level tests with updated CSV files would be needed.
+- Adding functionality to update an existing account's name.
 
-**Key Decisions & Changes (File Ingestion API Refinement):**
-1.  **Core Logic Update (`src/server/core/staging-entry/index.js`):**
-    *   Modified `ingestStagingEntriesFromFile`:
-        *   Updated CSV `type` field validation to accept 'Payment', 'Refund', 'DEBIT', 'CREDIT' (case-insensitive). 'Chargeback' is no longer in this explicit list.
-        *   Prioritized direct use of `EntryType.DEBIT` or `EntryType.CREDIT` if the CSV `type` is 'DEBIT' or 'CREDIT'.
-        *   Maintained fallback logic to determine `EntryType` based on `account.account_type` for CSV types 'Payment' and 'Refund'. The internal mapping for 'Chargeback' (if it was similar to 'Refund') has been removed from this specific CSV ingestion logic.
-2.  **Memory Bank Updates:**
-    *   `memory-bank/progress.md` (Will be updated).
-    *   This `activeContext.md` file.
-    *   `memory-bank/entities/staging-entries.md` (Will be updated to reflect new accepted types).
+**Key Decisions & Changes (Account Name Update):**
+1.  **Core Logic Update (`src/server/core/account/index.js`):**
+    *   Added new async function `updateAccountName(merchantId, accountId, newAccountName)`.
+    *   This function verifies account existence and ownership.
+    *   It uses `prisma.account.update()` to change the `account_name`.
+    *   Includes error handling for cases like account not found, merchant mismatch, and Prisma errors.
+    *   The function is exported in `module.exports`.
 
-**Previous Context (List Entries API Enhancement - Still Relevant Foundation):**
-- **List Entries API Enhancement:** Updated the "List Entries" API (`GET /accounts/{accountId}/entries`) to include the status of the associated transaction in the response.
-    - Core logic in `src/server/core/entry/index.js` updated.
-    - Swagger documentation in `src/server/routes/entry/index.js` updated.
+2.  **Route Definition Update (`src/server/routes/account/index.js`):**
+    *   Added a new `PUT /merchants/:merchant_id/accounts/:account_id` route.
+    *   The route handler calls `accountCore.updateAccountName`.
+    *   Includes input validation for `newAccountName` (must be a non-empty string).
+    *   Handles errors from the core logic and returns appropriate HTTP status codes (200, 400, 404, 500).
 
-**Previous Context (Recon Rule Selection Refinement - Still Relevant Foundation):**
-- **Recon Rule Selection Logic Refinement:** Completed implementation and testing of changes to ensure the Recon Engine selects the correct `ReconRule` based on the `StagingEntryProcessingMode` and the role of the account in the rule.
-    - In `TRANSACTION` mode (generating new expectations), the engine now specifically looks for a rule where `stagingEntry.account_id` is `account_one_id`.
-    - In `CONFIRMATION` mode (fulfilling existing expectations), the engine now specifically looks for a rule where `stagingEntry.account_id` is `account_two_id`.
-- **Testing (Recon Rule):** Unit tests for `src/server/core/recon-engine/engine.js` were updated and passed, confirming the new rule selection logic.
+3.  **Swagger Documentation Update (`src/server/routes/account/index.js`):**
+    *   Added Swagger JSDoc comments for the new `PUT` endpoint.
+    *   Defined a new schema `AccountNameUpdateInput` for the request body.
+    *   Ensured `AccountNameUpdateInput` is correctly placed within `components: schemas:`.
 
-**Previous Context (File Type Processing Modes Feature - Still Relevant Foundation):**
-- **"File Type Processing Modes" Feature:** This feature is foundational to the current changes.
-    - Added `StagingEntryProcessingMode` enum (`CONFIRMATION`, `TRANSACTION`).
-    - Added `processing_mode` to `StagingEntry` model (default `CONFIRMATION`).
-    - Updated Staging Entry creation and file ingestion APIs to handle `processing_mode`.
-    - Recon Engine (`processStagingEntryWithRecon`) branches logic based on `processing_mode`.
+**Memory Bank Updates:**
+-   Updated `memory-bank/entities/accounts.md` to include:
+    -   The new `PUT /api/merchants/:merchant_id/accounts/:account_id` endpoint.
+    -   Details of the `updateAccountName` function in the Core Logic section.
+    -   A new user story: "As a finance user, I want to be able to edit the name of an account."
+-   This `activeContext.md` file.
 
-**Previous Context (Consumer Polling Interval - Still Relevant):**
-- Recon Engine consumer polling interval is configurable via `RECON_ENGINE_POLL_INTERVAL_MS`, defaulting to 1 second.
+**Next Steps (Immediate for this task):**
+1.  Update `memory-bank/progress.md` to log the completion of this "update account name" feature.
+2.  Present the completion of the task to the user.
 
-**Next Steps (Broader - carried over, still relevant):**
--   Consider more complex matching rules for the Recon Engine.
--   Implement logic for partial matching/fulfillment.
--   Explore N-way reconciliation scenarios.
--   Performance optimization for large datasets.
--   Develop a User Interface for managing `NEEDS_MANUAL_REVIEW` items.
+**Broader Next Steps (Post this task):**
+-   Implement TODOs:
+    -   Add validation for `accountData` in `createAccount` (`src/server/core/account/index.js`).
+    -   Add validation for `newAccountName` (length limits etc.) in `updateAccountName` (`src/server/core/account/index.js`).
+    -   Add input validation for `req.body` in `POST /` route (`src/server/routes/account/index.js`) using Joi or Zod.
+    -   Implement balance check before account deletion in `deleteAccount` (`src/server/core/account/index.js`).
+-   Write automated tests for the new "update account name" functionality.
+-   Consider refactoring other parts of the application to use the new logger service for consistency.

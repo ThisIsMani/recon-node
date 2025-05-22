@@ -32,6 +32,15 @@ const router = express.Router({ mergeParams: true }); // mergeParams allows acce
  *           type: string
  *           description: 3-letter currency code (ISO 4217).
  *           example: "USD"
+ *     AccountNameUpdateInput:
+ *       type: object
+ *       required:
+ *         - account_name
+ *       properties:
+ *         account_name:
+ *           type: string
+ *           description: The new name for the account.
+ *           example: "Updated Operating Account"
  *     AccountResponse:
  *       type: object
  *       properties:
@@ -217,6 +226,80 @@ router.delete('/:account_id', async (req, res) => {
   } catch (error) {
     if (error.message.includes('not found') || error.message.includes('does not belong')) {
         return res.status(404).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /merchants/{merchant_id}/accounts/{account_id}:
+ *   put:
+ *     summary: Update an account's name
+ *     tags: [Accounts]
+ *     parameters:
+ *       - in: path
+ *         name: merchant_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the merchant
+ *       - in: path
+ *         name: account_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the account to update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AccountNameUpdateInput'
+ *     responses:
+ *       200:
+ *         description: Account name updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AccountResponse'
+ *       400:
+ *         description: Invalid input (e.g., missing account_name)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *       404:
+ *         description: Account not found or does not belong to the merchant
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *       500:
+ *         description: Server error
+ */
+router.put('/:account_id', async (req, res) => {
+  const { merchant_id, account_id } = req.params;
+  const { account_name: newAccountName } = req.body;
+
+  try {
+    if (!newAccountName || typeof newAccountName !== 'string' || newAccountName.trim() === '') {
+      return res.status(400).json({ error: 'Missing or invalid required field: account_name (must be a non-empty string)' });
+    }
+    const updatedAccount = await accountCore.updateAccountName(merchant_id, account_id, newAccountName.trim());
+    res.status(200).json(updatedAccount);
+  } catch (error) {
+    if (error.message.includes('not found') || error.message.includes('does not belong')) {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error.message.startsWith('Could not update account name. Internal error:')) {
+        return res.status(500).json({ error: 'An unexpected error occurred while updating the account name.' });
     }
     res.status(500).json({ error: error.message });
   }

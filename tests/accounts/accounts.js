@@ -136,6 +136,121 @@ describe('Account API Endpoints', () => {
     });
   });
 
+  describe('PUT /api/merchants/:merchant_id/accounts/:account_id', () => {
+    let existingAccount;
+    let originalUpdatedAt;
+
+    beforeEach(async () => {
+      const createdAccount = await prisma.account.create({
+        data: {
+          account_name: 'Initial Account Name',
+          account_type: 'DEBIT_NORMAL',
+          currency: 'USD',
+          merchant_id: testMerchant.merchant_id,
+        },
+      });
+      // Fetch fresh to get accurate DB-generated timestamps
+      existingAccount = await prisma.account.findUnique({ where: { account_id: createdAccount.account_id } });
+      originalUpdatedAt = existingAccount.updated_at;
+    });
+
+    it('should update an account name successfully', async () => {
+      const newAccountName = 'Updated Account Name';
+      const response = await request(app)
+        .put(`/api/merchants/${testMerchant.merchant_id}/accounts/${existingAccount.account_id}`)
+        .send({ account_name: newAccountName });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body.account_id).toBe(existingAccount.account_id);
+      expect(response.body.merchant_id).toBe(testMerchant.merchant_id);
+      expect(response.body.account_name).toBe(newAccountName);
+      expect(response.body.account_type).toBe(existingAccount.account_type);
+      expect(response.body.currency).toBe(existingAccount.currency);
+      expect(response.body).not.toHaveProperty('created_at');
+      expect(response.body).not.toHaveProperty('updated_at');
+
+      const dbAccount = await prisma.account.findUnique({ where: { account_id: existingAccount.account_id } });
+      expect(dbAccount).not.toBeNull();
+      expect(dbAccount.account_name).toBe(newAccountName);
+      expect(dbAccount.updated_at.toISOString()).not.toBe(originalUpdatedAt.toISOString());
+    });
+
+    it('should ignore attempts to update immutable fields like currency', async () => {
+      const newAccountName = 'Name Change Only';
+      const attemptedNewCurrency = 'EUR';
+      const response = await request(app)
+        .put(`/api/merchants/${testMerchant.merchant_id}/accounts/${existingAccount.account_id}`)
+        .send({ account_name: newAccountName, currency: attemptedNewCurrency });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body.account_name).toBe(newAccountName);
+      expect(response.body.currency).toBe(existingAccount.currency); // Currency should remain USD
+
+      const dbAccount = await prisma.account.findUnique({ where: { account_id: existingAccount.account_id } });
+      expect(dbAccount.currency).toBe(existingAccount.currency);
+      expect(dbAccount.account_name).toBe(newAccountName);
+      expect(dbAccount.updated_at.toISOString()).not.toBe(originalUpdatedAt.toISOString());
+    });
+    
+    it('should return 400 for invalid payload (e.g., empty account_name)', async () => {
+      const response = await request(app)
+        .put(`/api/merchants/${testMerchant.merchant_id}/accounts/${existingAccount.account_id}`)
+        .send({ account_name: '' }); 
+
+      expect(response.statusCode).toBe(400);
+      expect(response.body.error).toBeDefined();
+      expect(response.body.error).toMatch(/Missing or invalid required field: account_name \(must be a non-empty string\)/i);
+
+
+      const dbAccount = await prisma.account.findUnique({ where: { account_id: existingAccount.account_id } });
+      expect(dbAccount.account_name).toBe(existingAccount.account_name);
+      expect(dbAccount.updated_at.toISOString()).toBe(originalUpdatedAt.toISOString());
+    });
+
+    it('should return 404 if account_id does not exist', async () => {
+      const nonExistentAccountId = 'acc_nonexistent_uuid_put';
+      const response = await request(app)
+        .put(`/api/merchants/${testMerchant.merchant_id}/accounts/${nonExistentAccountId}`)
+        .send({ account_name: 'Trying to update ghost' });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.body.error).toContain(`Account with ID ${nonExistentAccountId} not found`);
+    });
+
+    it('should return 404 if merchant_id in URL does not exist', async () => {
+      const nonExistentMerchantId = 'm_ghost_put_007';
+      const response = await request(app)
+        .put(`/api/merchants/${nonExistentMerchantId}/accounts/${existingAccount.account_id}`)
+        .send({ account_name: 'Trying with ghost merchant' });
+      
+      expect(response.statusCode).toBe(404); 
+      // If the merchant doesn't exist, an account cannot belong to it.
+      // The core logic might first check merchant existence or try to fetch account scoped to merchant.
+      // The actual error "Account ... does not belong to merchant ..." is reasonable.
+      expect(response.body.error).toContain(`Account with ID ${existingAccount.account_id} does not belong to merchant ${nonExistentMerchantId}.`);
+    });
+
+    it('should return 404 if account belongs to a different merchant', async () => {
+      const otherMerchant = await prisma.merchantAccount.create({
+        data: { merchant_id: 'acc_api_other_m003_put', merchant_name: 'Other Test Merchant For PUT' },
+      });
+
+      const response = await request(app)
+        .put(`/api/merchants/${otherMerchant.merchant_id}/accounts/${existingAccount.account_id}`)
+        .send({ account_name: 'Cross-merchant update attempt' });
+
+      expect(response.statusCode).toBe(404);
+      // Consistent with DELETE test error message structure, adding the period.
+      expect(response.body.error).toContain(`Account with ID ${existingAccount.account_id} does not belong to merchant ${otherMerchant.merchant_id}.`);
+      
+      await prisma.merchantAccount.delete({ where: { merchant_id: otherMerchant.merchant_id } });
+      
+      const dbAccount = await prisma.account.findUnique({ where: { account_id: existingAccount.account_id } });
+      expect(dbAccount.account_name).toBe(existingAccount.account_name);
+      expect(dbAccount.updated_at.toISOString()).toBe(originalUpdatedAt.toISOString());
+    });
+  });
+
   describe('DELETE /api/merchants/:merchant_id/accounts/:account_id', () => {
     let accountToDelete;
     beforeEach(async () => { // Create a fresh account before each DELETE test
