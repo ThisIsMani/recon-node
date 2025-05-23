@@ -2,13 +2,17 @@
   "name": "recontemp",
   "version": "1.0.0",
   "description": "",
-  "main": "src/server.js",
+  "main": "dist/src/server.js",
   "directories": {
     "lib": "lib"
   },
   "scripts": {
-    "start": "node src/server.js",
-    "start:consumer": "node src/recon-engine-runner.js",
+    "clean": "rm -rf dist",
+    "start": "node dist/src/server.js",
+    "start:consumer": "node dist/src/recon-engine-runner.js",
+    "build": "tsc",
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
+    "dev:consumer": "nodemon --watch src --ext ts --exec ts-node src/recon-engine-runner.ts",
     "test": "cross-env NODE_ENV=test jest --detectOpenHandles",
     "db:reset": "npx prisma migrate reset"
   },
@@ -26,10 +30,22 @@
   },
   "devDependencies": {
     "@prisma/client": "^6.8.2",
+    "@types/cors": "^2.8.18",
+    "@types/express": "^5.0.2",
+    "@types/jest": "^29.5.14",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.15.21",
+    "@types/pg": "^8.15.2",
+    "@types/supertest": "^6.0.3",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
     "cross-env": "^7.0.3",
     "dotenv": "^16.5.0",
     "jest": "^29.7.0",
     "prisma": "^6.8.2",
-    "supertest": "^7.1.1"
+    "supertest": "^7.1.1",
+    "ts-jest": "^29.3.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
   }
 }

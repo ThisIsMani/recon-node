@@ -28,3 +28,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# TypeScript
+/dist
+*.tsbuildinfo

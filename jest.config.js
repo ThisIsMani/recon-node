@@ -1,22 +1,21 @@
-// jest.config.js
 module.exports = {
+  preset: 'ts-jest',
   testEnvironment: 'node',
   // Points to the file that runs after the test framework is installed in the environment
   // Used here to load .env.test
-  setupFilesAfterEnv: ['./jest.setup.js'], 
+  setupFilesAfterEnv: ['./jest.setup.ts'], 
   // Points to the file that runs once before all test suites
   // Used here to reset the test database
-  globalSetup: './jest.globalSetup.js',   
+  globalSetup: './jest.globalSetup.ts',   
   // Optional: A file that runs once after all test suites (e.g., for global cleanup)
   // globalTeardown: './jest.globalTeardown.js', 
   
   // Defines the patterns Jest uses to detect test files
   testMatch: [
-    '**/tests/**/*.js', // Matches our convention like tests/merchants/merchants.js
-    // Default Jest patterns can be included if needed for other conventions:
-    // '**/__tests__/**/*.[jt]s?(x)',
-    // '**/?(*.)+(spec|test).[tj]s?(x)',
+    '**/tests/**/*.[jt]s?(x)', // Matches .js, .jsx, .ts, .tsx files in tests directory
   ],
+  moduleFileExtensions: ['js', 'json', 'jsx', 'ts', 'tsx', 'node'],
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
 
   // Automatically clear mock calls, instances, contexts and results before every test
   clearMocks: true,
@@ -26,11 +25,11 @@ module.exports = {
 
   // An array of glob patterns indicating a set of files for which coverage information should be collected
   collectCoverageFrom: [
-    'src/**/*.js', // Collect coverage from all .js files in src
-    '!src/server.js', // Exclude server startup file
-    '!src/app.js',    // Exclude main app setup if it's mostly boilerplate
-    '!src/config/**/*.js', // Exclude config files
-    '!src/services/database.js', // Exclude old DB service if not used
+    'src/**/*.ts', // Collect coverage primarily from .ts files in src
+    '!src/server.ts', 
+    '!src/app.ts',    
+    '!src/config/**/*.ts', 
+    '!src/services/database.ts', // Exclude pg database service if Prisma is primary
     // Add other files/patterns to ignore for coverage if necessary
   ],
   
@@ -38,8 +37,8 @@ module.exports = {
   coveragePathIgnorePatterns: [
     '/node_modules/',
     'jest.config.js',
-    'jest.setup.js',
-    'jest.globalSetup.js',
+    'jest.setup.ts',
+    'jest.globalSetup.ts',
   ],
 
   // Indicates whether the coverage information should be collected while executing the test
