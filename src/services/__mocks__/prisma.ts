@@ -23,6 +23,7 @@ const prismaMock: PrismaMockType = {
     findUnique: jest.fn(),
     create: jest.fn(),
     findMany: jest.fn(),
+    deleteMany: jest.fn(),
     // Add other methods as needed by tests
   },
   account: {
@@ -31,6 +32,7 @@ const prismaMock: PrismaMockType = {
     findMany: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
+    deleteMany: jest.fn(),
     // Add other methods as needed by tests
   },
   transaction: {
@@ -38,6 +40,7 @@ const prismaMock: PrismaMockType = {
     findUnique: jest.fn(),
     findMany: jest.fn(),
     update: jest.fn(),
+    deleteMany: jest.fn(),
     // Add other methods as needed by tests
   },
   entry: {
@@ -47,6 +50,7 @@ const prismaMock: PrismaMockType = {
     findMany: jest.fn(),
     update: jest.fn(),
     updateMany: jest.fn(),
+    deleteMany: jest.fn(),
     // Add other methods as needed by tests
   },
   stagingEntry: {
@@ -61,10 +65,12 @@ const prismaMock: PrismaMockType = {
   },
   reconRule: {
     findUnique: jest.fn(),
+    findUniqueOrThrow: jest.fn(),
     create: jest.fn(),
     findFirst: jest.fn(),
     findMany: jest.fn(),
     delete: jest.fn(),
+    deleteMany: jest.fn(),
     // Add other methods as needed by tests
   },
   processTracker: {

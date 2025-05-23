@@ -4,7 +4,7 @@ The Recon Engine is the core component responsible for processing `StagingEntry`
 
 ## Core Functions
 
--   **`generateTransactionEntriesFromStaging(stagingEntry, merchantId)`** (`src/server/core/recon-engine/engine.js`)
+-   **`generateTransactionEntriesFromStaging(stagingEntry, merchantId)`** (`src/server/core/recon-engine/engine.ts`)
     -   Takes a `StagingEntry` and `merchantId`.
     -   **Rule Selection:** Finds an applicable `ReconRule` where `merchant_id` matches and `stagingEntry.account_id` matches `account_one_id` in the rule. This assumes that for generating new transaction pairs (typical in `TRANSACTION` mode), the `stagingEntry.account_id` represents the source/initiating account.
         -   Throws `NoReconRuleFoundError` if no such rule applies (e.g., `No reconciliation rule found for merchant X where account Y is account_one_id...`).
@@ -14,7 +14,7 @@ The Recon Engine is the core component responsible for processing `StagingEntry`
         2.  **Expected Entry**: Status `EXPECTED` for the `contra_account_id`. Metadata includes a spread of `stagingEntry.metadata`, `order_id` (from `stagingEntry.metadata`), `source_staging_entry_id`, and `recon_rule_id`.
     -   Returns an array containing these two entry data objects.
 
--   **`processStagingEntryWithRecon(stagingEntry, merchantId)`** (`src/server/core/recon-engine/engine.js`)
+-   **`processStagingEntryWithRecon(stagingEntry, merchantId)`** (`src/server/core/recon-engine/engine.ts`)
     -   Orchestrates the processing of a single `StagingEntry`.
     -   Validates `stagingEntry` and `merchantId`.
     -   Validates `stagingEntry.processing_mode`. If invalid, updates `StagingEntry` to `NEEDS_MANUAL_REVIEW` and throws an error.
@@ -58,17 +58,81 @@ The Recon Engine is the core component responsible for processing `StagingEntry`
         -   Updates `StagingEntry` to `NEEDS_MANUAL_REVIEW` with error details in metadata.
         -   Re-throws the error to be handled by the consumer (which updates `ProcessTracker`).
 
-## Consumer (`src/server/core/recon-engine/consumer.js`)
+## Error Hierarchy (`src/server/core/recon-engine/error/`)
 
--   A separate process that polls the `ProcessTracker` table for tasks of type `PROCESS_STAGING_ENTRY` with status `PENDING`.
--   **`processNextTask()`**:
-    -   Fetches the next pending task.
-    -   Updates task status to `PROCESSING`.
-    -   Retrieves the `StagingEntry` and its associated `Account` (to get `merchant_id`).
-    -   Calls `processStagingEntryWithRecon(stagingEntry, merchantId)`.
-    -   On success, updates task status to `COMPLETED`.
-    -   On failure (error from `processStagingEntryWithRecon`), updates task status to `FAILED` and logs the error.
--   **`start()`**: Initiates polling loop using `setInterval` based on `RECON_ENGINE_POLL_INTERVAL_MS` from config.
+The Recon Engine implements a structured error hierarchy:
+
+-   **`ReconEngineError`** (`src/server/core/recon-engine/error/base-error.ts`)
+    -   Base class for Recon Engine specific errors.
+    -   Extends the global `AppError` (`src/errors/AppError.ts`), inheriting `statusCode`, `errorCode`, `isOperational`, and `details`.
+    -   Adds an optional `cause` property for error chaining.
+
+-   **`ValidationError`** (`src/server/core/recon-engine/error/validation-error.ts`)
+    -   Extends `ReconEngineError`. Used for data validation failures.
+    -   Defaults to `statusCode: 400` and `errorCode: 'ERR_RECON_VALIDATION'`.
+    -   Now has 100% test coverage to ensure robust error handling.
+
+-   **`ProcessingError`** (`src/server/core/recon-engine/error/processing-error.ts`)
+    -   Extends `ReconEngineError`. Used for errors during processing.
+    -   Defaults to `statusCode: 500` and `errorCode: 'ERR_RECON_PROCESSING'`.
+
+## Task System (`src/server/core/recon-engine/task/`)
+
+The Recon Engine uses a task-based architecture:
+
+-   **`ReconTask` Interface** (`src/server/core/recon-engine/task/task-interface.ts`)
+    -   Defines the contract for recon tasks.
+    -   Methods:
+        -   `decide(processTrackerTask: ProcessTracker): Promise<boolean>`: Determines if the task can handle the given `ProcessTracker` task. If yes, it should load necessary data (like `StagingEntry`) into itself.
+        -   `validate(): Promise<Result<void, AppError>>`: Validates data loaded by `decide`. Returns `ok(undefined)` on success.
+        -   `run(): Promise<Result<TransactionWithEntries | null, AppError>>`: Executes business logic using data from `decide` and `validate`.
+
+-   **`BaseTask`** (`src/server/core/recon-engine/task/base-task.ts`)
+    -   Abstract implementation of `ReconTask`.
+    -   Manages `this.currentStagingEntry: StagingEntryWithAccount | null` and `this.currentProcessTrackerTask: ProcessTracker | null`.
+    -   Provides utilities for status updates (`updateStagingEntryStatus`, `markAsNeedsManualReview`, `markAsProcessed`) which now use `this.currentStagingEntry`.
+
+-   **Task Implementations**:
+    -   **`TransactionCreationTask`** (`src/server/core/recon-engine/task/transaction-task.ts`)
+        -   Handles staging entries in `TRANSACTION` mode
+        -   Creates new transaction pairs with one posted and one expected entry
+        -   Now has 100% test coverage with comprehensive tests for all methods
+    
+    -   **`ExpectedEntryMatchingTask`** (`src/server/core/recon-engine/task/matching-task.ts`)
+        -   Handles staging entries in `CONFIRMATION` mode
+        -   Attempts to match against existing expected entries
+        -   Creates evolved transactions when matches are found
+        -   Still needs improved test coverage (currently at 38.59%)
+
+-   **`TaskManager`** (`src/server/core/recon-engine/task/task-manager.ts`)
+    -   Coordinates task selection and execution
+    -   Finds the appropriate task for a given `ProcessTracker` task.
+    -   Provides a plugin architecture for adding new task types.
+
+## Consumer (`src/server/core/recon-engine/consumer.ts`)
+
+-   Polls `ProcessTracker` for `PROCESS_STAGING_ENTRY` tasks.
+-   **`processSingleTask()`**:
+    -   Fetches a pending `ProcessTracker` task.
+    -   Updates its status to `PROCESSING`.
+    -   Extracts `staging_entry_id` from the payload for logging.
+    -   Uses `TaskManager.findApplicableTask(processTrackerTask)` to get the `ReconTask`.
+    -   Calls `applicableTaskInstance.validate()`.
+    -   If valid, calls `applicableTaskInstance.run()`.
+    -   On overall success, updates `ProcessTracker` task status to `COMPLETED`.
+    -   On failure, updates task status to `FAILED` and logs the error with contextual information.
+-   **`startConsumer()`**: Initiates polling loop with configurable interval using `RECON_ENGINE_POLL_INTERVAL_MS` from config.
+
+## Test Coverage
+
+The test coverage for the Recon Engine has been significantly improved:
+- `transaction-task.ts`: Improved from 46.8% to 100% coverage
+- `process-tracker/index.ts`: Improved from 28.57% to 100% coverage
+- `validation-error.ts`: Improved from 66.66% to 100% coverage
+
+Areas that still need coverage improvement:
+- `matching-task.ts`: Currently at 38.59% coverage
+- `recon-engine-runner.ts`: Currently at 0% coverage
 
 ## Key Concepts
 
@@ -81,6 +145,8 @@ The Recon Engine is the core component responsible for processing `StagingEntry`
 -   **Atomicity:** Uses `prisma.$transaction` for operations that must succeed or fail together (e.g., creating/updating transactions and entries, updating staging entry status).
 -   **Error States:** `StagingEntry` records are moved to `NEEDS_MANUAL_REVIEW` upon any processing error, with error details stored in their metadata.
 -   **Idempotency (via Process Tracker):** The consumer attempts to ensure tasks are processed once by updating task statuses. (Further enhancements for strict idempotency might be needed for retries on transient errors).
+-   **Extensibility:** The task-based architecture makes it easy to add new processing modes by implementing additional `ReconTask` classes.
+-   **Type Safety:** All components use TypeScript for improved type safety and code maintenance.
 
 ## Related Entities
 
