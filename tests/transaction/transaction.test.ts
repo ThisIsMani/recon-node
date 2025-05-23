@@ -110,12 +110,20 @@ describe('Transaction API - GET /api/merchants/:merchant_id/transactions', () =>
     expect(response.statusCode).toBe(200);
     expect(response.body).toBeInstanceOf(Array);
     expect(response.body.length).toBe(transactionsData.length);
-    response.body.forEach((tx: PrismaTransaction & { entries: Partial<PrismaEntry>[] }) => {
+    response.body.forEach((tx: any) => { // Use any for now, or import TransactionResponse
       expect(tx).toHaveProperty('transaction_id');
       expect(tx).toHaveProperty('merchant_id', testMerchant.merchant_id);
       expect(tx).toHaveProperty('status');
-      expect(tx).toHaveProperty('entries');
-      expect(tx.entries).toBeInstanceOf(Array);
+      expect(tx).toHaveProperty('created_at');
+      expect(tx).toHaveProperty('updated_at');
+      // The TransactionResponse DTO does not include 'entries' by default.
+      // expect(tx).toHaveProperty('entries'); 
+      // expect(tx.entries).toBeInstanceOf(Array);
+      if (tx.discarded_at) {
+        expect(new Date(tx.discarded_at).toISOString()).toBe(tx.discarded_at);
+      }
+      expect(new Date(tx.created_at).toISOString()).toBe(tx.created_at);
+      expect(new Date(tx.updated_at).toISOString()).toBe(tx.updated_at);
     });
   });
 
@@ -124,7 +132,7 @@ describe('Transaction API - GET /api/merchants/:merchant_id/transactions', () =>
     expect(response.statusCode).toBe(200);
     const postedCount = transactionsData.filter(t => t.status === 'POSTED').length;
     expect(response.body.length).toBe(postedCount);
-    response.body.forEach((tx: PrismaTransaction) => expect(tx.status).toBe('POSTED'));
+    response.body.forEach((tx: any) => expect(tx.status).toBe('POSTED'));
   });
 
   it('should filter transactions by logical_transaction_id', async () => {
@@ -133,7 +141,7 @@ describe('Transaction API - GET /api/merchants/:merchant_id/transactions', () =>
     expect(response.statusCode).toBe(200);
     const logicalCount = transactionsData.filter(t => t.logical_transaction_id === logicalIdToTest).length;
     expect(response.body.length).toBe(logicalCount);
-    response.body.forEach((tx: PrismaTransaction) => expect(tx.logical_transaction_id).toBe(logicalIdToTest));
+    response.body.forEach((tx: any) => expect(tx.logical_transaction_id).toBe(logicalIdToTest));
   });
 
   it('should filter transactions by version for a specific logical_transaction_id', async () => {

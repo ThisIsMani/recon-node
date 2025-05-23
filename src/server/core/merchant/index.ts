@@ -1,8 +1,12 @@
 import prisma from '../../../services/prisma';
 import logger from '../../../services/logger';
-import { MerchantAccount } from '@prisma/client'; // Import Prisma generated type
+// Import the new Domain Model instead of Prisma's directly in function signatures where appropriate
+import { Merchant } from '../../domain_models/merchant.types';
+import { MerchantAccount } from '@prisma/client'; // Still needed for Prisma operations
+import { AppError, NotFoundError, ValidationError, InternalServerError } from '../../../errors/AppError';
 
-interface MerchantData {
+// This local interface can be replaced by the imported Merchant domain type or a specific Input DTO type
+interface CreateMerchantInput { // Renamed for clarity, could also use a dedicated DTO from domain_models
     merchant_id: string;
     merchant_name: string;
 }
@@ -17,42 +21,50 @@ interface PrismaError extends Error {
 
 /**
  * Creates a new merchant account.
- * @param {MerchantData} merchantData - Data for the new merchant.
- * @returns {Promise<MerchantAccount>} The created merchant account.
+ * @param {CreateMerchantInput} merchantInput - Data for the new merchant.
+ * @returns {Promise<Merchant>} The created merchant account, typed as the Domain Model.
  * @throws {Error} If a merchant with the same ID already exists or other DB error.
  */
-const createMerchant = async (merchantData: MerchantData): Promise<MerchantAccount> => {
+const createMerchant = async (merchantInput: CreateMerchantInput): Promise<Merchant> => {
     try {
-        const newMerchant = await prisma.merchantAccount.create({
+        const newPrismaMerchant = await prisma.merchantAccount.create({
             data: {
-                merchant_id: merchantData.merchant_id,
-                merchant_name: merchantData.merchant_name,
+                merchant_id: merchantInput.merchant_id,
+                merchant_name: merchantInput.merchant_name,
             },
         });
-        return newMerchant;
+        // Cast or map Prisma model to Domain model if they differ.
+        // Since our Domain Merchant extends PrismaMerchantAccount, direct assignment is fine.
+        return newPrismaMerchant as Merchant;
     } catch (error) {
-        const prismaError = error as PrismaError;
-        // Prisma throws specific error codes, e.g., P2002 for unique constraint violation
-        if (prismaError.code === 'P2002' && prismaError.meta?.target?.includes('merchant_id')) {
-            throw new Error(`Merchant with ID '${merchantData.merchant_id}' already exists.`);
+        if (error instanceof AppError) {
+            throw error;
         }
-        logger.error('Error creating merchant:', error);
-        throw new Error('Could not create merchant account.'); // Generic error for client
+        const prismaError = error as PrismaError;
+        if (prismaError.code === 'P2002' && prismaError.meta?.target?.includes('merchant_id')) {
+            throw new ValidationError(`Merchant with ID '${merchantInput.merchant_id}' already exists.`);
+        }
+        logger.error(error as Error, { context: 'Error creating merchant' });
+        throw new InternalServerError('Could not create merchant account.'); // Generic error for client
     }
 };
 
 /**
  * Lists all merchant accounts.
- * @returns {Promise<MerchantAccount[]>} A list of all merchant accounts.
+ * @returns {Promise<Merchant[]>} A list of all merchant accounts, typed as Domain Models.
  * @throws {Error} If there's a database error.
  */
-const listMerchants = async (): Promise<MerchantAccount[]> => {
+const listMerchants = async (): Promise<Merchant[]> => {
     try {
-        const merchants = await prisma.merchantAccount.findMany();
-        return merchants;
+        const prismaMerchants = await prisma.merchantAccount.findMany();
+        // Cast or map Prisma models to Domain models if they differ.
+        return prismaMerchants as Merchant[];
     } catch (error) {
-        logger.error('Error listing merchants:', error);
-        throw new Error('Could not retrieve merchant accounts.');
+        if (error instanceof AppError) {
+            throw error;
+        }
+        logger.error(error as Error, { context: 'Error listing merchants' });
+        throw new InternalServerError('Could not retrieve merchant accounts.');
     }
 };
 

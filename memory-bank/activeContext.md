@@ -1,15 +1,31 @@
-## Task: Review `package.json` Dependencies (2025-05-23)
+# Current Work: TypeScript Migration and Test Stability
 
-**Status:** Completed
+## Overview
+We've completed a full migration of the codebase from JavaScript to TypeScript, including the conversion of all tests. While the source TypeScript tests are passing, we've encountered and fixed some issues with compiled JavaScript tests and TypeScript type errors.
 
-**Summary:**
-- User requested a cleanup of old JavaScript dependencies from `package.json` after the TypeScript migration.
-- Reviewed `dependencies` and `devDependencies`.
-- **Dependencies:** All listed packages (`cors`, `csv-parser`, `express`, `multer`, `pg`, `swagger-jsdoc`, `swagger-ui-express`) are general Node.js libraries and remain relevant.
-- **DevDependencies:** All listed packages (`@prisma/client`, various `@types/*`, `cross-env`, `dotenv`, `jest`, `prisma`, `supertest`, `ts-jest`, `ts-node`, `typescript`) are essential for the TypeScript development, build, and test workflow.
+## Recent Work
 
-**Key Decisions & Outcomes:**
-- No dependencies were identified as obsolete solely due to the TypeScript migration. All current dependencies and devDependencies appear to serve a purpose in the TypeScript project.
+### Test Suite Stabilization (May 23, 2025)
+We've resolved issues with the tests by:
 
-**Next Steps (General Project):**
-- The `package.json` is considered up-to-date with respect to the TypeScript migration.
+1. **Fixed Consumer Test Mocking**:
+   - Updated `tests/recon-engine/core/consumer.test.ts` to use the proper mock approach
+   - Replaced inline mocking with importing from the official mock file at `src/server/core/recon-engine/__mocks__/task-delegator.ts`
+   - Ensured correct order of mocking before imports
+
+2. **Fixed Entry Test TypeScript Errors**:
+   - Addressed JSON handling issues with Prisma in `tests/entry/core/entry.test.ts`
+   - Added proper type assertions for test data objects
+   - Separated creation data from response data to match Prisma's expectations
+   - Used `Prisma.JsonNull` and type assertions to fix compatibility issues
+   - Used `undefined` instead of `null` for metadata where appropriate to match Prisma's type expectations
+
+3. **General Test Strategy Improvements**:
+   - Used more explicit type assertions to work around TypeScript+Prisma type challenges
+   - Added better documentation comments to clarify the test approach
+   - Ensured tests can run in both TypeScript via ts-jest and in compiled JavaScript form
+
+## Next Steps
+- Continue monitoring test stability, especially for edge cases
+- Consider additional improvements to the mocking strategy for Prisma operations
+- Look for opportunities to refine the type definitions to reduce the need for type assertions

@@ -3,7 +3,9 @@ import { ParamsDictionary } from 'express-serve-static-core';
 import { listEntries } from '../../core/entry'; // Core logic is now TS
 import prisma from '../../../services/prisma';
 import logger from '../../../services/logger';
-import { EntryStatus } from '@prisma/client'; // For query param typing
+import { EntryStatus as PrismaEntryStatus } from '@prisma/client'; // For query param typing, aliased
+import { AppError } from '../../../errors/AppError'; // Import AppError
+import { EntryResponse } from '../../api_models/entry.types'; // Import new API model
 
 const router: Router = express.Router({ mergeParams: true });
 
@@ -12,7 +14,7 @@ interface EntryRouteParams extends ParamsDictionary {
 }
 
 interface EntryQuery {
-    status?: EntryStatus;
+    status?: PrismaEntryStatus; // Use aliased Prisma type
 }
 
 /**
@@ -35,13 +37,36 @@ const listEntriesHandler: RequestHandler<EntryRouteParams, any, any, EntryQuery>
       return; // Explicitly return to satisfy void return type for this path
     }
 
-    const entries = await listEntries(account_id, queryParams);
-    res.json(entries);
+    const entryDataList = await listEntries(account_id, queryParams);
+    // Map Prisma models to API models
+    const responseEntries: EntryResponse[] = entryDataList.map(entryData => ({
+        entry_id: entryData.entry_id,
+        account_id: entryData.account_id,
+        transaction_id: entryData.transaction_id,
+        entry_type: entryData.entry_type,
+        amount: entryData.amount, // Assuming core logic returns Decimal or number compatible with EntryResponse
+        currency: entryData.currency,
+        status: entryData.status,
+        effective_date: entryData.effective_date,
+        metadata: entryData.metadata,
+        discarded_at: entryData.discarded_at,
+        created_at: entryData.created_at,
+        updated_at: entryData.updated_at,
+    }));
+    res.json(responseEntries);
     // No explicit return here, as res.json() sends response and handler ends.
   } catch (error) {
     const err = error as Error;
-    logger.error(`Failed to list entries for account ${account_id}:`, err);
-    res.status(500).json({ error: 'Failed to retrieve entries.' });
+    logger.error(err, { context: `Failed to list entries for account ${account_id}` });
+    if (err instanceof AppError) {
+        res.status(err.statusCode).json({ 
+            error: err.message, 
+            code: err.errorCode, 
+            details: err.details 
+        });
+    } else {
+        res.status(500).json({ error: 'An unexpected error occurred while listing entries.' });
+    }
     // No explicit return here for error path either.
   }
 };

@@ -1,14 +1,18 @@
 import prisma from '../../../services/prisma';
 import logger from '../../../services/logger';
-import { Transaction as PrismaTransaction, Entry as PrismaEntry, TransactionStatus, EntryType, EntryStatus, Prisma, MerchantAccount } from '@prisma/client'; // Added EntryStatus
+import { Transaction as PrismaTransaction, Entry as PrismaEntry, TransactionStatus, EntryType, EntryStatus as PrismaEntryStatusEnum, Prisma, MerchantAccount } from '@prisma/client'; // Added EntryStatus, aliased PrismaEntryStatusEnum
+import { Transaction } from '../../domain_models/transaction.types'; // Import Domain Model for Transaction
+// Assuming Entry domain model will be created, for now use PrismaEntry or a placeholder
+// import { Entry as DomainEntry } from '../../domain_models/entry.types'; 
 import * as entryCore from '../entry'; // Now TS
 import type { CreateEntryInternalData as EntryCoreCreateEntryData } from '../entry'; // Explicit type import
+import { AppError, InternalServerError } from '../../../errors/AppError'; // Import AppError and InternalServerError
 
 // Custom Error for balance issues
-export class BalanceError extends Error {
+export class BalanceError extends AppError {
   constructor(message: string) {
-    super(message);
-    this.name = 'BalanceError';
+    super(message, 400, 'ERR_BALANCE', true); // HTTP 400, specific error code
+    this.name = 'BalanceError'; // Overwrite AppError's default name
   }
 }
 
@@ -35,21 +39,22 @@ interface EntryDataForTransaction {
   entry_type: EntryType;
   amount: number | Prisma.Decimal;
   currency: string;
-  status: EntryStatus; // EntryStatus from @prisma/client
+  status: PrismaEntryStatusEnum; // Use aliased Prisma EntryStatus enum
   effective_date: string | Date;
   metadata?: Prisma.InputJsonValue;
   discarded_at?: string | Date | null;
 }
 
-// Type for the returned transaction, including its entries
-type TransactionWithEntries = PrismaTransaction & {
-  entries: PrismaEntry[];
+// Type for the returned transaction, including its entries, using Domain models (or Prisma types as placeholders)
+// This could be moved to domain_models/transaction.types.ts if preferred
+export type TransactionWithEntries = Transaction & { // Use Domain Transaction
+  entries: PrismaEntry[]; // Placeholder: Use DomainEntry[] once defined
 };
 
 /**
  * Lists transactions for a specific merchant, with optional filtering.
  */
-const listTransactions = async (merchantId: string, queryParams: ListTransactionsQueryParams = {}): Promise<Array<PrismaTransaction & { entries: Partial<PrismaEntry>[] }>> => {
+const listTransactions = async (merchantId: string, queryParams: ListTransactionsQueryParams = {}): Promise<Array<Transaction & { entries: Partial<PrismaEntry>[] }>> => { // Return array of Domain Transaction
   const { status, logical_transaction_id, version } = queryParams;
   const whereClause: Prisma.TransactionWhereInput = { merchant_id: merchantId };
 
@@ -92,10 +97,13 @@ const listTransactions = async (merchantId: string, queryParams: ListTransaction
         created_at: 'desc'
       }
     });
-    return transactions as Array<PrismaTransaction & { entries: Partial<PrismaEntry>[] }>;
+    return transactions as Array<Transaction & { entries: Partial<PrismaEntry>[] }>; // Cast to Domain Transaction
   } catch (error) {
-    logger.error(`Error fetching transactions for merchant ${merchantId}:`, error);
-    throw new Error('Could not retrieve transactions.');
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error(error as Error, { context: `Error fetching transactions for merchant ${merchantId}` });
+    throw new InternalServerError('Could not retrieve transactions.');
   }
 };
 
@@ -182,11 +190,12 @@ const createTransactionInternal = async (
       return await prisma.$transaction(executeInTransaction);
     }
   } catch (error) {
-    logger.error(`Error during atomic transaction creation for merchant ${merchant_id}:`, error);
-    if (error instanceof BalanceError) {
+    if (error instanceof AppError) { // This includes BalanceError
+      logger.error(error, { context: `Error during atomic transaction creation for merchant ${merchant_id}` });
       throw error;
     }
-    throw new Error('Could not create internal transaction with entries due to an internal error.');
+    logger.error(error as Error, { context: `Error during atomic transaction creation for merchant ${merchant_id}` });
+    throw new InternalServerError('Could not create internal transaction with entries due to an internal error.');
   }
 };
 

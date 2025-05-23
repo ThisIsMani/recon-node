@@ -15,11 +15,12 @@ import * as transactionCore from '../transaction'; // Now TS
 import { BalanceError } from '../transaction'; // Now TS
 import logger from '../../../services/logger';
 import type { CreateEntryInternalData } from '../entry'; // For typing
+import { AppError } from '../../../errors/AppError'; // Import AppError
 
-export class NoReconRuleFoundError extends Error {
+export class NoReconRuleFoundError extends AppError {
   constructor(message: string) {
-    super(message);
-    this.name = 'NoReconRuleFoundError';
+    super(message, 422, 'ERR_NO_RECON_RULE', true); // HTTP 422, specific error code
+    this.name = 'NoReconRuleFoundError'; // Overwrite AppError's default name
   }
 }
 
@@ -84,8 +85,15 @@ type StagingEntryWithIncludes = StagingEntry & {
     account?: { merchant_id: string } | null; 
 };
 
+// Forward declare TransactionWithEntries if not imported, or import from types
+// For now, assuming it's available or will be via an import if needed.
+// Let's use the full Prisma type for clarity here.
+type TransactionWithEntriesForEngine = Prisma.TransactionGetPayload<{
+  include: { entries: true };
+}>;
 
-async function processStagingEntryWithRecon(stagingEntryFull: StagingEntryWithIncludes, merchantId: string): Promise<PrismaTransaction | null> {
+
+async function processStagingEntryWithRecon(stagingEntryFull: StagingEntryWithIncludes, merchantId: string): Promise<TransactionWithEntriesForEngine | null> {
   const stagingEntry = stagingEntryFull; // Use the more complete type
 
   if (!stagingEntry || !stagingEntry.staging_entry_id) {
@@ -282,7 +290,8 @@ async function processStagingEntryWithRecon(stagingEntryFull: StagingEntryWithIn
     }
   } catch (error) {
     const err = error as Error;
-    logger.error(`Error in processStagingEntryWithRecon for staging_entry_id ${stagingEntry.staging_entry_id} (Processing Mode: ${stagingEntry.processing_mode}): ${err.message}`, err);
+    const contextString = `Error in processStagingEntryWithRecon for staging_entry_id ${stagingEntry.staging_entry_id} (Processing Mode: ${stagingEntry.processing_mode})`;
+    logger.error(err, { context: contextString });
     const currentMetadata = stagingEntry.metadata as Prisma.JsonObject || {};
     
     if (!(err.name === 'NoMatchFoundError' || err.message.startsWith('Ambiguous match') || err.message.startsWith('Mismatch detected'))) {
@@ -294,7 +303,8 @@ async function processStagingEntryWithRecon(stagingEntryFull: StagingEntryWithIn
         logger.log(`StagingEntry ${stagingEntry.staging_entry_id} marked as NEEDS_MANUAL_REVIEW due to ${err.name || 'GenericError'}.`);
       } catch (updateError: any) {
         const updErr = updateError as Error;
-        logger.error(`Failed to update StagingEntry ${stagingEntry.staging_entry_id} status after ${err.name}: ${updErr.message}`, updErr);
+        const updateErrorContext = `Failed to update StagingEntry ${stagingEntry.staging_entry_id} status after ${err.name}`;
+        logger.error(updErr, { context: updateErrorContext });
       }
     }
     throw err; 

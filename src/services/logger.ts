@@ -1,69 +1,103 @@
-/**
- * A simple logger service that wraps console logging.
- * Logging is enabled by default. Set LOGGING_ENABLED=false in .env to disable.
- */
+import winston from 'winston';
+import { AsyncLocalStorage } from 'async_hooks';
+
+// For Request ID context
+interface RequestContext {
+  requestId?: string;
+}
+export const requestContextStorage = new AsyncLocalStorage<RequestContext>();
+
 const LOGGING_ENABLED: boolean = process.env.LOGGING_ENABLED !== 'false';
+const NODE_ENV: string = process.env.NODE_ENV || 'development';
+
+const { combine, timestamp, printf, colorize, errors } = winston.format;
+
+// Custom format for human-readable logs
+const customFormat = printf(({ level, message, timestamp: ts, requestId: reqId, stack, ...metadata }) => {
+  let log = `${ts} [${level}]`;
+  if (reqId) {
+    log += ` [${reqId}]`;
+  }
+  log += `: ${message}`;
+
+  // Add metadata if any, excluding known properties
+  const meta = Object.keys(metadata).length ? JSON.stringify(metadata) : '';
+  if (meta && meta !== '{}') {
+    log += ` ${meta}`;
+  }
+
+  // Add stack trace for errors
+  if (stack) {
+    log += `\n${stack}`;
+  }
+  return log;
+});
+
+// Custom formatter to inject requestId
+const injectRequestId = winston.format((info) => {
+  const store = requestContextStorage.getStore();
+  if (store?.requestId) {
+    info.requestId = store.requestId;
+  }
+  return info;
+});
+
+const winstonLogger = winston.createLogger({
+  level: NODE_ENV === 'development' ? 'debug' : 'info',
+  format: combine(
+    timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
+    errors({ stack: true }), // This will add the stack to the info object
+    injectRequestId(), // Apply the custom requestId formatter
+    NODE_ENV === 'development' ? colorize() : winston.format.uncolorize(), // Colorize for dev
+    customFormat
+  ),
+  transports: [
+    new winston.transports.Console({
+      silent: !LOGGING_ENABLED,
+    }),
+  ],
+  // Do not exit on handled exceptions
+  exitOnError: false,
+});
 
 interface Logger {
-  log: (...args: any[]) => void;
-  error: (...args: any[]) => void;
-  warn: (...args: any[]) => void;
-  info: (...args: any[]) => void;
-  debug: (...args: any[]) => void;
+  log: (message: string, ...meta: any[]) => void;
+  error: (message: string | Error, ...meta: any[]) => void;
+  warn: (message: string, ...meta: any[]) => void;
+  info: (message: string, ...meta: any[]) => void;
+  debug: (message: string, ...meta: any[]) => void;
+  query: (message: string, ...meta: any[]) => void; // For Prisma queries
 }
 
 const logger: Logger = {
-  /**
-   * Logs a message to the console if logging is enabled.
-   * @param {...any} args - Arguments to pass to console.log.
-   */
-  log: (...args: any[]): void => {
-    if (LOGGING_ENABLED) {
-      console.log(...args);
+  log: (message: string, ...meta: any[]): void => {
+    winstonLogger.log('info', message, ...meta);
+  },
+  error: (message: string | Error, ...meta: any[]): void => {
+    if (message instanceof Error) {
+      const metadataPayload: any = { error: message };
+      if (meta.length === 1 && typeof meta[0] === 'object' && meta[0] !== null && !Array.isArray(meta[0])) {
+        Object.assign(metadataPayload, meta[0]);
+      } else if (meta.length > 0) {
+        metadataPayload.additionalMeta = meta;
+      }
+      winstonLogger.error(message.message, metadataPayload);
+    } else {
+      winstonLogger.error(message, ...meta);
     }
   },
-
-  /**
-   * Logs an error message to the console if logging is enabled.
-   * @param {...any} args - Arguments to pass to console.error.
-   */
-  error: (...args: any[]): void => {
-    if (LOGGING_ENABLED) {
-      console.error(...args);
-    }
+  warn: (message: string, ...meta: any[]): void => {
+    winstonLogger.warn(message, ...meta);
   },
-
-  /**
-   * Logs a warning message to the console if logging is enabled.
-   * @param {...any} args - Arguments to pass to console.warn.
-   */
-  warn: (...args: any[]): void => {
-    if (LOGGING_ENABLED) {
-      console.warn(...args);
-    }
+  info: (message: string, ...meta: any[]): void => {
+    winstonLogger.info(message, ...meta);
   },
-
-  /**
-   * Logs an info message (alias for log) to the console if logging is enabled.
-   * @param {...any} args - Arguments to pass to console.info (or console.log).
-   */
-  info: (...args: any[]): void => {
-    if (LOGGING_ENABLED) {
-      // console.info is often an alias for console.log
-      console.info ? console.info(...args) : console.log(...args);
-    }
+  debug: (message: string, ...meta: any[]): void => {
+    winstonLogger.debug(message, ...meta);
   },
-
-  /**
-   * Logs a debug message to the console if logging is enabled.
-   * @param {...any} args - Arguments to pass to console.debug (or console.log).
-   */
-  debug: (...args: any[]): void => {
-    if (LOGGING_ENABLED) {
-      // console.debug might not be available everywhere, fallback to console.log
-      console.debug ? console.debug(...args) : console.log(...args);
-    }
-  },
+  query: (message: string, ...meta: any[]): void => { // Specific method for SQL queries
+    winstonLogger.log('debug', `SQL: ${message}`, ...meta); // Log SQL queries at debug level
+  }
 };
 
 export default logger;

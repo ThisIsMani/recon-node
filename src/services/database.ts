@@ -11,7 +11,8 @@ pool.on('connect', () => {
 });
 
 pool.on('error', (err: Error) => {
-    logger.error('Unexpected error on idle client (pg Pool)', err);
+    // Pass the error object directly, with context as metadata
+    logger.error(err, { context: 'Unexpected error on idle client (pg Pool)' });
     process.exit(-1); 
 });
 
@@ -30,7 +31,8 @@ const databaseService: DatabaseService = {
             return true;
         } catch (error) {
             const err = error as Error;
-            logger.error('Database connection test failed (pg Pool):', err.stack);
+            // Pass the error object directly, with context as metadata
+            logger.error(err, { context: 'Database connection test failed (pg Pool)' });
             return false;
         }
     },

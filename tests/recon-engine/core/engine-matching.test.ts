@@ -11,6 +11,7 @@ jest.mock('../../../src/services/logger', () => ({
     warn: jest.fn(),
     error: jest.fn(),
     log: jest.fn(),
+    query: jest.fn(), // Added query method to the mock
   }
 }));
 

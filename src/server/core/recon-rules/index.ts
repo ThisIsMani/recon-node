@@ -1,9 +1,13 @@
 import prisma from '../../../services/prisma';
 import logger from '../../../services/logger';
-import { ReconRule as PrismaReconRule, Account as PrismaAccount } from '@prisma/client';
+import { ReconRule as PrismaReconRulePrisma, Account as PrismaAccount, Prisma } from '@prisma/client'; // Renamed PrismaReconRule
+import { ReconRule } from '../../domain_models/recon_rule.types'; // Import Domain Model
+import { AppError, NotFoundError, ValidationError, InternalServerError } from '../../../errors/AppError';
+import { findUniqueOrThrow, ensureEntityBelongsToMerchant } from '../../../services/databaseHelpers'; 
 
 // Interface for the data required to create a recon rule
-interface CreateReconRuleData {
+// This can align with CreateReconRuleRequest from API models or be a specific domain input type
+export interface CreateReconRuleInput { // Renamed and can be exported
   merchant_id: string;
   account_one_id: string;
   account_two_id: string;
@@ -19,50 +23,44 @@ type PrismaError = Error & {
     };
 };
 
-// Define the output type for listReconRules, including nested account details
-type ReconRuleWithAccounts = PrismaReconRule & {
-  accountOne: Pick<PrismaAccount, 'account_id' | 'account_name' | 'merchant_id'> | null;
-  accountTwo: Pick<PrismaAccount, 'account_id' | 'account_name' | 'merchant_id'> | null;
+// Define the output type for listReconRules, including nested account details, using Domain Model
+type ReconRuleWithAccounts = ReconRule & { // Use Domain ReconRule
+  accountOne: Pick<PrismaAccount, 'account_id' | 'account_name' | 'merchant_id'> | null; // Related models can remain Prisma types
+  accountTwo: Pick<PrismaAccount, 'account_id' | 'account_name' | 'merchant_id'> | null; // Related models can remain Prisma types
 };
 
 
-async function createReconRule(data: CreateReconRuleData): Promise<PrismaReconRule> {
+async function createReconRule(data: CreateReconRuleInput): Promise<ReconRule> { // Return Domain ReconRule
   const { merchant_id, account_one_id, account_two_id } = data;
 
   if (!merchant_id || !account_one_id || !account_two_id) {
-    throw new Error('merchant_id, account_one_id, and account_two_id are required.');
+    throw new ValidationError('merchant_id, account_one_id, and account_two_id are required.');
   }
 
   if (account_one_id === account_two_id) {
-    throw new Error('Account IDs for a rule must be different.');
+    throw new ValidationError('Account IDs for a rule must be different.');
   }
 
-  const merchant = await prisma.merchantAccount.findUnique({
-    where: { merchant_id },
-  });
-  if (!merchant) {
-    throw new Error(`Merchant with ID ${merchant_id} not found.`);
-  }
+  await findUniqueOrThrow<import('@prisma/client').MerchantAccount>(
+    Prisma.ModelName.MerchantAccount,
+    { where: { merchant_id } },
+    'Merchant',
+    merchant_id
+  );
 
-  const accountOne = await prisma.account.findUnique({
-    where: {
-      account_id: account_one_id,
-      // merchant_id: merchant_id, // account_one might not belong to the same merchant if it's a shared/central account
-    },
-  });
-  if (!accountOne) {
-    // Adjusted error message slightly as account_one might not be tied to *this* merchant
-    throw new Error(`Account with ID ${account_one_id} (account_one_id) not found.`);
-  }
+  await findUniqueOrThrow<PrismaAccount>(
+    Prisma.ModelName.Account,
+    { where: { account_id: account_one_id } },
+    'Account (account_one_id)',
+    account_one_id
+  );
   
-  // Account two should typically belong to the same merchant as the rule, or be a global/system account.
-  // The original code checked accountTwo without merchant_id context, which might be intentional.
-  // If accountTwo must belong to the same merchant, the query should be:
-  // where: { account_id: account_two_id, merchant_id: merchant_id }
-  const accountTwo = await prisma.account.findUnique({ where: { account_id: account_two_id } });
-  if (!accountTwo) {
-    throw new Error(`Account with ID ${account_two_id} (account_two_id) not found.`);
-  }
+  await findUniqueOrThrow<PrismaAccount>(
+    Prisma.ModelName.Account,
+    { where: { account_id: account_two_id } },
+    'Account (account_two_id)',
+    account_two_id
+  );
 
   try {
     const newRule = await prisma.reconRule.create({
@@ -70,17 +68,20 @@ async function createReconRule(data: CreateReconRuleData): Promise<PrismaReconRu
         merchant_id,
         account_one_id,
         account_two_id,
-        // description: data.description, // if description is part of CreateReconRuleData
+        // description: data.description, // if description is part of CreateReconRuleInput
       },
     });
-    return newRule;
+    return newRule as ReconRule; // Cast to Domain model
   } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
     const prismaError = error as PrismaError;
     if (prismaError.code === 'P2002') { // Unique constraint violation
-      throw new Error('A reconciliation rule with these account IDs already exists for this merchant.');
+      throw new ValidationError('A reconciliation rule with these account IDs already exists for this merchant.');
     }
-    logger.error('Error creating recon rule:', error);
-    throw new Error('Could not create recon rule.');
+    logger.error(error as Error, { context: 'Error creating recon rule' });
+    throw new InternalServerError('Could not create recon rule.');
   }
 }
 
@@ -107,47 +108,50 @@ async function listReconRules(merchant_id: string): Promise<ReconRuleWithAccount
         },
       },
     });
-    return rules as ReconRuleWithAccounts[]; // Cast needed because Prisma's include type is broader
+    return rules as ReconRuleWithAccounts[]; // Cast to array of Domain model with relations
   } catch (error) {
-    logger.error('Error listing recon rules:', error);
-    throw new Error('Could not list recon rules.');
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error(error as Error, { context: 'Error listing recon rules' });
+    throw new InternalServerError('Could not list recon rules.');
   }
 }
 
-async function deleteReconRule(merchant_id: string, rule_id: string): Promise<PrismaReconRule> {
+async function deleteReconRule(merchant_id: string, rule_id: string): Promise<ReconRule> { // Return Domain ReconRule
   try {
-    // First, ensure the rule belongs to the merchant to prevent unauthorized deletion
-    const rule = await prisma.reconRule.findUnique({
-        where: { id: rule_id },
-    });
+    // First, ensure the rule exists and belongs to the merchant
+    const rule = await findUniqueOrThrow<PrismaReconRulePrisma>( // Use aliased PrismaReconRule
+        Prisma.ModelName.ReconRule,
+        { where: { id: rule_id } },
+        'Recon rule',
+        rule_id
+    );
 
-    if (!rule) {
-        const errorMessage = `Recon rule with ID ${rule_id} not found.`; // rule_id is now string
-        throw new Error(errorMessage);
-    }
-    if (rule.merchant_id !== merchant_id) {
-        const errorMessage = `Recon rule with ID ${rule_id} does not belong to merchant ${merchant_id}.`; // rule_id is now string
-        throw new Error(errorMessage);
-    }
+    ensureEntityBelongsToMerchant(rule, merchant_id, 'Recon rule', rule_id);
     
-    const deletedRule = await prisma.reconRule.delete({
+    const deletedPrismaRule = await prisma.reconRule.delete({
       where: {
         id: rule_id,
         // merchant_id: merchant_id, // This is implicitly checked by the findUnique above
       },
     });
-    return deletedRule;
+    return deletedPrismaRule as ReconRule; // Cast to Domain model
   } catch (error) {
+    if (error instanceof AppError) { // This will catch NotFoundError from findUniqueOrThrow or ensureEntityBelongsToMerchant
+      logger.error(error, { context: `AppError in deleteReconRule for rule ${rule_id}`}); // Log it before re-throwing
+      throw error;
+    }
     const prismaError = error as PrismaError;
     if (process.env.NODE_ENV !== 'test') {
-      logger.error('Error deleting recon rule:', error);
+      logger.error(prismaError, { context: `Error deleting recon rule ${rule_id}` });
     }
-    if (prismaError.message?.startsWith('Recon rule with ID')) throw prismaError;
-    if (prismaError.code === 'P2025') { // Record to delete does not exist.
-        const errorMessage = `Recon rule with ID ${rule_id} not found for deletion.`; // rule_id is now string
-        throw new Error(errorMessage);
+    // P2025 means "An operation failed because it depends on one or more records that were required but not found."
+    // This could happen if the rule was deleted between the find and the delete operations.
+    if (prismaError.code === 'P2025') { 
+        throw new NotFoundError(`Recon rule with ID ${rule_id} not found for deletion (or was deleted by another process).`);
     }
-    throw new Error('Could not delete recon rule.');
+    throw new InternalServerError(`Could not delete recon rule ${rule_id}.`);
   }
 }
 

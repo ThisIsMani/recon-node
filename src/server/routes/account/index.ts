@@ -2,20 +2,10 @@ import express, { Router, Request, Response, NextFunction, RequestHandler } from
 import * as accountCore from '../../core/account'; // Using * as import for CommonJS module
 import logger from '../../../services/logger';
 import { AccountType as PrismaAccountType } from '@prisma/client'; // For validating account_type
+import { AppError } from '../../../errors/AppError'; // Import AppError
+import { CreateAccountRequest, UpdateAccountRequest, AccountResponse } from '../../api_models/account.types'; // Import new API models
 
 const router: Router = express.Router({ mergeParams: true }); // mergeParams allows access to :merchant_id
-
-// Interface for request body when creating an account
-interface CreateAccountBody {
-    account_name: string;
-    account_type: PrismaAccountType;
-    currency: string;
-}
-
-// Interface for request body when updating an account name
-interface UpdateAccountNameBody {
-    account_name: string;
-}
 
 /**
  * @swagger
@@ -24,93 +14,157 @@ interface UpdateAccountNameBody {
  *   description: Account management for a specific merchant
  */
 
-// ... (Swagger definitions remain the same) ...
+// ... (Swagger definitions remain the same, but should reference new schema names from account.types.ts if not already) ...
 
-const createAccountHandler: RequestHandler<{ merchant_id: string }, any, CreateAccountBody> = async (req, res, next) => {
-  const { merchant_id } = req.params;
+const createAccountHandler: RequestHandler<{ merchant_id: string }, any, CreateAccountRequest> = async (req, res, next) => {
+  const { merchant_id } = req.params; // merchant_id from path is already in CreateAccountRequest
   try {
-    const { account_name, account_type, currency } = req.body;
+    const { account_name, account_type, currency } = req.body; // Fields from CreateAccountRequest
+    
+    // Add merchant_id from path to the data for core function
+    const accountDataForCore = { merchant_id, account_name, account_type, currency };
+
     if (!account_name || !account_type || !currency) {
+      // Consider using AppError for consistency
       res.status(400).json({ error: 'Missing required fields: account_name, account_type, currency' });
       return;
     }
-    // Basic validation for account_type enum
     if (!Object.values(PrismaAccountType).includes(account_type)) {
         res.status(400).json({ error: `Invalid account_type. Must be one of: ${Object.values(PrismaAccountType).join(', ')}` });
         return;
     }
-    const account = await accountCore.createAccount(merchant_id, { account_name, account_type, currency });
-    res.status(201).json(account);
+    const accountData = await accountCore.createAccount(accountDataForCore); // Pass combined data
+    
+    // Map Prisma model to API model
+    const responseAccount: AccountResponse = {
+        account_id: accountData.account_id,
+        merchant_id: accountData.merchant_id,
+        account_name: accountData.account_name,
+        account_type: accountData.account_type,
+        currency: accountData.currency,
+        created_at: accountData.created_at,
+        updated_at: accountData.updated_at,
+    };
+    res.status(201).json(responseAccount);
   } catch (error) {
+    // Error handling remains the same, but ensure next(error) is called for AppError as well
+    // if global error handler is set up. For now, keeping existing explicit handling.
     const err = error as Error;
-    if (err.message.includes('Merchant with ID') || err.message.startsWith('Invalid input for account creation. Details:')) {
-        res.status(400).json({ error: err.message });
-        return;
+    logger.error(err, { context: `Error in POST /merchants/${merchant_id}/accounts` });
+    if (err instanceof AppError) {
+        res.status(err.statusCode).json({ 
+            error: err.message, 
+            code: err.errorCode, 
+            details: err.details 
+        });
+    } else {
+        res.status(500).json({ error: 'An unexpected error occurred while creating the account.' });
     }
-    logger.error(`Unexpected error in POST /merchants/${merchant_id}/accounts: ${err.message}`, err.stack);
-    res.status(500).json({ error: 'An unexpected error occurred while creating the account.' });
   }
 };
-router.post('/', createAccountHandler);
+router.post('/', createAccountHandler as RequestHandler);
+
 
 const listAccountsHandler: RequestHandler<{ merchant_id: string }> = async (req, res, next) => {
   const { merchant_id } = req.params;
   try {
-    const accounts = await accountCore.listAccountsByMerchant(merchant_id);
-    res.status(200).json(accounts);
+    const accountsData = await accountCore.listAccountsByMerchant(merchant_id);
+    // Map array of Prisma models to array of API models
+    const responseAccounts: AccountResponse[] = accountsData.map(acc => ({
+        account_id: acc.account_id,
+        merchant_id: acc.merchant_id,
+        account_name: acc.account_name,
+        account_type: acc.account_type,
+        currency: acc.currency,
+        created_at: acc.created_at,
+        updated_at: acc.updated_at,
+    }));
+    res.status(200).json(responseAccounts);
   } catch (error) {
     const err = error as Error;
-    logger.error(`Error in GET /merchants/${merchant_id}/accounts: ${err.message}`, err.stack);
-    res.status(500).json({ error: err.message });
+    logger.error(err, { context: `Error in GET /merchants/${merchant_id}/accounts` });
+    if (err instanceof AppError) {
+        res.status(err.statusCode).json({ 
+            error: err.message, 
+            code: err.errorCode, 
+            details: err.details 
+        });
+    } else {
+        res.status(500).json({ error: 'An unexpected error occurred while listing accounts.' });
+    }
   }
 };
-router.get('/', listAccountsHandler);
+router.get('/', listAccountsHandler as RequestHandler);
+
 
 const deleteAccountHandler: RequestHandler<{ merchant_id: string, account_id: string }> = async (req, res, next) => {
   const { merchant_id, account_id } = req.params;
   try {
-    const deletedAccount = await accountCore.deleteAccount(merchant_id, account_id);
-    res.status(200).json(deletedAccount);
+    const deletedAccountData = await accountCore.deleteAccount(merchant_id, account_id);
+    // Map Prisma model to API model
+    const responseAccount: AccountResponse = {
+        account_id: deletedAccountData.account_id,
+        merchant_id: deletedAccountData.merchant_id,
+        account_name: deletedAccountData.account_name,
+        account_type: deletedAccountData.account_type,
+        currency: deletedAccountData.currency,
+        created_at: deletedAccountData.created_at,
+        updated_at: deletedAccountData.updated_at,
+    };
+    res.status(200).json(responseAccount);
   } catch (error) {
     const err = error as Error;
-    if (err.message.includes('not found') || err.message.includes('does not belong')) {
-        res.status(404).json({ error: err.message });
-        return;
+    logger.error(err, { context: `Error in DELETE /merchants/${merchant_id}/accounts/${account_id}` });
+     if (err instanceof AppError) {
+        res.status(err.statusCode).json({ 
+            error: err.message, 
+            code: err.errorCode, 
+            details: err.details 
+        });
+    } else {
+        res.status(500).json({ error: 'An unexpected error occurred while deleting the account.' });
     }
-    logger.error(`Error in DELETE /merchants/${merchant_id}/accounts/${account_id}: ${err.message}`, err.stack);
-    res.status(500).json({ error: err.message });
   }
 };
-router.delete('/:account_id', deleteAccountHandler);
+router.delete('/:account_id', deleteAccountHandler as RequestHandler);
 
-const updateAccountNameHandler: RequestHandler<{ merchant_id: string, account_id: string }, any, UpdateAccountNameBody> = async (req, res, next) => {
+
+const updateAccountNameHandler: RequestHandler<{ merchant_id: string, account_id: string }, any, UpdateAccountRequest> = async (req, res, next) => {
   const { merchant_id, account_id } = req.params;
-  const { account_name: newAccountName } = req.body;
+  // account_name is optional in UpdateAccountRequest (Partial<CreateAccountRequest>)
+  const { account_name: newAccountName } = req.body; 
 
   try {
     if (!newAccountName || typeof newAccountName !== 'string' || newAccountName.trim() === '') {
       res.status(400).json({ error: 'Missing or invalid required field: account_name (must be a non-empty string)' });
       return;
     }
-    const updatedAccount = await accountCore.updateAccountName(merchant_id, account_id, newAccountName.trim());
-    res.status(200).json(updatedAccount);
+    const updatedAccountData = await accountCore.updateAccountName(merchant_id, account_id, newAccountName.trim());
+    // Map Prisma model to API model
+    const responseAccount: AccountResponse = {
+        account_id: updatedAccountData.account_id,
+        merchant_id: updatedAccountData.merchant_id,
+        account_name: updatedAccountData.account_name,
+        account_type: updatedAccountData.account_type,
+        currency: updatedAccountData.currency,
+        created_at: updatedAccountData.created_at,
+        updated_at: updatedAccountData.updated_at,
+    };
+    res.status(200).json(responseAccount);
   } catch (error) {
     const err = error as Error;
-    if (err.message.includes('not found') || err.message.includes('does not belong')) {
-      res.status(404).json({ error: err.message });
-      return;
+    logger.error(err, { context: `Error in PUT /merchants/${merchant_id}/accounts/${account_id}` });
+    if (err instanceof AppError) {
+        res.status(err.statusCode).json({ 
+            error: err.message, 
+            code: err.errorCode, 
+            details: err.details 
+        });
+    } else {
+        res.status(500).json({ error: 'An unexpected error occurred while updating the account name.' });
     }
-    // Distinguish between user-facing "could not update" and actual internal server errors.
-    if (err.message.startsWith('Could not update account name. Internal error:')) {
-        logger.error(`Internal error in PUT /merchants/${merchant_id}/accounts/${account_id}: ${err.message}`, err.stack);
-        res.status(500).json({ error: 'An unexpected internal error occurred while updating the account name.' });
-        return;
-    }
-    // For other errors from core logic that might be validation-like or specific (e.g. "Invalid input")
-    logger.error(`Error in PUT /merchants/${merchant_id}/accounts/${account_id}: ${err.message}`, err.stack);
-    res.status(500).json({ error: err.message }); // Or a more generic message if preferred
   }
 };
-router.put('/:account_id', updateAccountNameHandler);
+router.put('/:account_id', updateAccountNameHandler as RequestHandler);
 
 export default router;

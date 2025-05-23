@@ -1,9 +1,11 @@
 import express, { Router, Request, Response, NextFunction, RequestHandler } from 'express';
 import { ParamsDictionary } from 'express-serve-static-core';
 import multer, { MulterError } from 'multer';
-import { StagingEntryProcessingMode, StagingEntryStatus as PrismaStagingEntryStatus } from '@prisma/client';
+import { StagingEntryProcessingMode, StagingEntryStatus as PrismaStagingEntryStatus, EntryType as PrismaEntryType } from '@prisma/client'; // Added EntryType
 import * as stagingEntryCore from '../../core/staging-entry';
 import logger from '../../../services/logger';
+import { AppError, NotFoundError, ValidationError } from '../../../errors/AppError'; // Import AppError types
+import { CreateStagingEntryRequest, StagingEntryResponse } from '../../api_models/staging_entry.types'; // Import new API models
 
 const router: Router = express.Router({ mergeParams: true });
 
@@ -29,49 +31,78 @@ interface StagingEntryQuery {
     status?: PrismaStagingEntryStatus;
 }
 
-interface CreateStagingEntryBody {
-    entry_type: string; // Will be validated by core logic against EntryType enum
-    amount: number;
-    currency: string;
-    effective_date: string;
-    metadata?: any;
-    discarded_at?: string;
-    processing_mode: StagingEntryProcessingMode;
-}
+// CreateStagingEntryBody interface is replaced by imported CreateStagingEntryRequest
 
 /** @swagger 
  * tags:
  *   name: StagingEntries
  *   description: Staging Entry management for pre-processing financial movements
  */
-// ... (Swagger definitions remain the same) ...
+// ... (Swagger definitions remain the same - ensure they reference new schema names from staging_entry.types.ts) ...
 
-const createStagingEntryHandler: RequestHandler<StagingEntryParams, any, CreateStagingEntryBody> = async (req, res, next) => {
+const createStagingEntryHandler: RequestHandler<StagingEntryParams, any, CreateStagingEntryRequest> = async (req, res, next) => {
   try {
     const { account_id } = req.params;
-    const { processing_mode, ...entryData } = req.body;
+    // req.body is now typed as CreateStagingEntryRequest
+    const { entry_type, amount, currency, effective_date, processing_mode, metadata } = req.body;
 
     if (!processing_mode || !Object.values(StagingEntryProcessingMode).includes(processing_mode)) {
       res.status(400).json({ error: `Invalid or missing processing_mode. Must be one of: ${Object.values(StagingEntryProcessingMode).join(', ')}` });
       return;
     }
-
-    // Type assertion for entryData to match core logic expectations
-    const typedEntryData = entryData as any; // Let core logic handle detailed validation for now
-    const entryPayload = { ...typedEntryData, processing_mode };
-    
-    const entry = await stagingEntryCore.createStagingEntry(account_id, entryPayload);
-    res.status(201).json(entry);
-  } catch (error) {
-    const err = error as Error;
-    if (process.env.NODE_ENV !== 'test') {
-        logger.error(`Error in POST /accounts/${req.params.account_id}/staging-entries:`, err.message);
+    // Add other basic validations if needed, or rely on core logic
+    if (!entry_type || !Object.values(PrismaEntryType).includes(entry_type as PrismaEntryType)) {
+        res.status(400).json({ error: `Invalid or missing entry_type. Must be one of: ${Object.values(PrismaEntryType).join(', ')}` });
+        return;
     }
-    const isBadRequest = err.message.includes('not found') || 
-                         err.message.includes('Missing required fields') ||
-                         err.message.includes('Invalid input') ||
-                         err.message.includes('processing_mode');
-    res.status(isBadRequest ? 400 : 500).json({ error: err.message });
+    
+    // Construct payload for core function, ensuring types match (e.g. amount to Decimal if core expects it)
+    // The core function createStagingEntry expects specific types, ensure alignment.
+    // For now, assuming core function can handle number for amount and string/Date for effective_date.
+    const entryPayload = { 
+        entry_type: entry_type as PrismaEntryType, // Cast if necessary
+        amount, 
+        currency, 
+        effective_date, 
+        processing_mode, 
+        metadata 
+    };
+    
+    const stagingEntryData = await stagingEntryCore.createStagingEntry(account_id, entryPayload as any); // Cast to any if core expects different shape
+
+    // Map Prisma model to API model
+    const responseEntry: StagingEntryResponse = {
+        staging_entry_id: stagingEntryData.staging_entry_id,
+        account_id: stagingEntryData.account_id,
+        entry_type: stagingEntryData.entry_type,
+        amount: stagingEntryData.amount,
+        currency: stagingEntryData.currency,
+        status: stagingEntryData.status,
+        processing_mode: stagingEntryData.processing_mode,
+        effective_date: stagingEntryData.effective_date,
+        metadata: stagingEntryData.metadata,
+        discarded_at: stagingEntryData.discarded_at,
+        created_at: stagingEntryData.created_at,
+        updated_at: stagingEntryData.updated_at,
+    };
+    res.status(201).json(responseEntry);
+  } catch (error) {
+    const err = error as Error; 
+    if (process.env.NODE_ENV !== 'test') {
+        // logger.error already handles Error instances correctly
+        logger.error(err, { context: `Error in POST /accounts/${req.params.account_id}/staging-entries` });
+    }
+
+    if (err instanceof AppError) {
+        res.status(err.statusCode).json({ 
+            error: err.message, 
+            code: err.errorCode, 
+            details: err.details 
+        });
+    } else {
+        // Fallback for non-AppError errors
+        res.status(500).json({ error: 'An unexpected error occurred.' });
+    }
   }
 };
 router.post('/', createStagingEntryHandler);
@@ -79,16 +110,40 @@ router.post('/', createStagingEntryHandler);
 const listStagingEntriesHandler: RequestHandler<StagingEntryParams, any, any, StagingEntryQuery> = async (req, res, next) => {
   try {
     const { account_id } = req.params;
-    const queryParams = { ...req.query };
+    const queryParams = { ...req.query }; // Query params type StagingEntryQuery
 
-    const entries = await stagingEntryCore.listStagingEntries(account_id, queryParams);
-    res.status(200).json(entries);
+    const stagingEntryDataList = await stagingEntryCore.listStagingEntries(account_id, queryParams);
+    
+    // Map Prisma models to API models
+    const responseEntries: StagingEntryResponse[] = stagingEntryDataList.map(sEntryData => ({
+        staging_entry_id: sEntryData.staging_entry_id,
+        account_id: sEntryData.account_id,
+        entry_type: sEntryData.entry_type,
+        amount: sEntryData.amount,
+        currency: sEntryData.currency,
+        status: sEntryData.status,
+        processing_mode: sEntryData.processing_mode,
+        effective_date: sEntryData.effective_date,
+        metadata: sEntryData.metadata,
+        discarded_at: sEntryData.discarded_at,
+        created_at: sEntryData.created_at,
+        updated_at: sEntryData.updated_at,
+    }));
+    res.status(200).json(responseEntries);
   } catch (error) {
     const err = error as Error;
     if (process.env.NODE_ENV !== 'test') {
-        logger.error(`Error in GET /accounts/${req.params.account_id}/staging-entries:`, err.message);
+        logger.error(err, { context: `Error in GET /accounts/${req.params.account_id}/staging-entries` });
     }
-    res.status(500).json({ error: err.message });
+    if (err instanceof AppError) {
+        res.status(err.statusCode).json({ 
+            error: err.message, 
+            code: err.errorCode, 
+            details: err.details 
+        });
+    } else {
+        res.status(500).json({ error: 'An unexpected error occurred while listing staging entries.' });
+    }
   }
 };
 router.get('/', listStagingEntriesHandler);
@@ -137,17 +192,21 @@ const ingestFileHandler: RequestHandler<StagingEntryParams, any, { processing_mo
   } catch (error) {
     const err = error as Error;
     if (process.env.NODE_ENV !== 'test') {
-        logger.error(`Error in POST /accounts/${req.params.account_id}/staging-entries/files:`, err.message, err.stack);
+        logger.error(err, { context: `Error in POST /accounts/${req.params.account_id}/staging-entries/files` });
     }
-    if (err.message.includes('Account with ID') && err.message.includes('not found')) {
-        res.status(404).json({ error: err.message });
-        return;
-    }
-    if (err.message.includes('Invalid file type')) { // This might be caught by multer middleware already
+
+    if (err instanceof AppError) {
+        res.status(err.statusCode).json({ 
+            error: err.message, 
+            code: err.errorCode, 
+            details: err.details 
+        });
+    } else if (err.message && (err.message.includes('Invalid file type') || err.message.includes('File upload error'))) { // Multer errors or custom file type error
         res.status(400).json({ error: err.message });
-        return;
     }
-    res.status(500).json({ error: err.message || 'Could not process file.' });
+    else {
+        res.status(500).json({ error: 'Could not process file due to an unexpected error.' });
+    }
   }
 };
 router.post('/files', fileUploadMiddleware, ingestFileHandler);

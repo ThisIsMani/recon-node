@@ -113,13 +113,33 @@ describe('Entry API - GET /api/accounts/:account_id/entries', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toBeInstanceOf(Array);
     expect(response.body.length).toBe(entryData.length);
-    response.body.forEach((entry: PrismaEntry & { account: any }) => { // Add type for entry
+    response.body.forEach((entry: any) => { // Use 'any' or import EntryResponse
       expect(entry).toHaveProperty('entry_id');
       expect(entry).toHaveProperty('account_id', testAccount.account_id);
+      expect(entry).toHaveProperty('transaction_id', dummyTransaction.transaction_id);
+      expect(entry).toHaveProperty('entry_type');
       expect(entry).toHaveProperty('amount');
+      expect(entry).toHaveProperty('currency');
       expect(entry).toHaveProperty('status');
-      expect(entry).toHaveProperty('account');
-      expect(entry.account).toHaveProperty('account_name', testAccount.account_name);
+      expect(entry).toHaveProperty('effective_date');
+      expect(new Date(entry.effective_date).toISOString()).toBe(entry.effective_date);
+      expect(entry).toHaveProperty('created_at');
+      expect(new Date(entry.created_at).toISOString()).toBe(entry.created_at);
+      expect(entry).toHaveProperty('updated_at');
+      expect(new Date(entry.updated_at).toISOString()).toBe(entry.updated_at);
+      // metadata and discarded_at are optional
+      if (entry.hasOwnProperty('metadata')) {
+        expect(entry).toHaveProperty('metadata');
+      }
+      if (entry.hasOwnProperty('discarded_at')) {
+        expect(entry).toHaveProperty('discarded_at');
+        if (entry.discarded_at !== null) {
+            expect(new Date(entry.discarded_at).toISOString()).toBe(entry.discarded_at);
+        }
+      }
+      // Related account and transaction objects are not part of EntryResponse by default
+      // expect(entry).toHaveProperty('account'); 
+      // expect(entry.account).toHaveProperty('account_name', testAccount.account_name);
     });
   });
 

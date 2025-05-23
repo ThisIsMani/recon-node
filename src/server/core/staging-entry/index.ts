@@ -1,24 +1,27 @@
 import prisma from '../../../services/prisma';
-import { AccountType, EntryType, StagingEntryProcessingMode, StagingEntryStatus, StagingEntry as PrismaStagingEntry, Account as PrismaAccount, Prisma } from '@prisma/client';
+import { AccountType, EntryType, StagingEntryProcessingMode, StagingEntryStatus as PrismaStagingEntryStatusEnum, StagingEntry as PrismaStagingEntry, Account as PrismaAccount, Prisma } from '@prisma/client'; // Aliased StagingEntryStatus
+import { StagingEntry, StagingEntryStatus } from '../../domain_models/staging_entry.types'; // Import Domain Model
 import * as processTrackerCore from '../process-tracker';
 import logger from '../../../services/logger';
+import { AppError, NotFoundError, ValidationError, InternalServerError } from '../../../errors/AppError';
+import { findUniqueOrThrow } from '../../../services/databaseHelpers'; // Added import
 import csv from 'csv-parser';
 import { Readable } from 'stream';
 
-// Interface for data to create a staging entry
-interface StagingEntryData {
+// Interface for data to create a staging entry - can be aligned with CreateStagingEntryRequest or a new Domain Input DTO
+export interface CreateStagingEntryInput { // Renamed and can be exported if used by routes directly
     entry_type: EntryType;
-    amount: number | Prisma.Decimal; // Prisma.Decimal can handle precision
+    amount: number | Prisma.Decimal; 
     currency: string;
     effective_date: string | Date;
     metadata?: any;
-    discarded_at?: string | Date | null;
+    // discarded_at is usually not set on creation
     processing_mode: StagingEntryProcessingMode;
 }
 
 // Interface for query parameters when listing staging entries
 interface ListStagingEntriesQueryParams {
-    status?: StagingEntryStatus; // StagingEntryStatus is Prisma-generated
+    status?: PrismaStagingEntryStatusEnum; // Use aliased Prisma enum
 }
 
 // Type for Prisma errors
@@ -53,65 +56,75 @@ interface IngestionResult {
 }
 
 
-async function createStagingEntry(account_id: string, entryData: StagingEntryData): Promise<PrismaStagingEntry> {
-  const { entry_type, amount, currency, effective_date, metadata, discarded_at, processing_mode } = entryData;
+async function createStagingEntry(account_id: string, entryData: CreateStagingEntryInput): Promise<StagingEntry> { // Return Domain StagingEntry
+  const { entry_type, amount, currency, effective_date, metadata, processing_mode } = entryData;
+  // discarded_at is not typically part of creation payload
   if (!entry_type || amount == null || !currency || !effective_date || !processing_mode) {
-    throw new Error('Missing required fields in body: entry_type, amount, currency, effective_date, processing_mode.');
+    throw new ValidationError('Missing required fields in body: entry_type, amount, currency, effective_date, processing_mode.');
   }
   if (!Object.values(StagingEntryProcessingMode).includes(processing_mode)) {
-    throw new Error(`Invalid processing_mode. Must be one of: ${Object.values(StagingEntryProcessingMode).join(', ')}`);
+    throw new ValidationError(`Invalid processing_mode. Must be one of: ${Object.values(StagingEntryProcessingMode).join(', ')}`);
   }
-  const account = await prisma.account.findUnique({ where: { account_id } });
-  if (!account) {
-    throw new Error(`Account with ID ${account_id} not found.`);
-  }
+  
+  await findUniqueOrThrow<PrismaAccount>(
+    Prisma.ModelName.Account, 
+    { where: { account_id } },
+    'Account',
+    account_id
+  );
+
   try {
-    const newEntry = await prisma.stagingEntry.create({
+    const newPrismaStagingEntry = await prisma.stagingEntry.create({
       data: {
         account_id,
         entry_type,
-        amount: new Prisma.Decimal(amount.toString()), // Ensure amount is Decimal
+        amount: new Prisma.Decimal(amount.toString()), 
         currency,
         processing_mode,
         effective_date: new Date(effective_date),
         metadata: metadata || Prisma.JsonNull,
-        discarded_at: discarded_at ? new Date(discarded_at) : null,
+        // discarded_at is not set on creation
       },
     });
 
     try {
       await processTrackerCore.createTask(
         'PROCESS_STAGING_ENTRY',
-        { staging_entry_id: newEntry.staging_entry_id }
+        { 
+          staging_entry_id: newPrismaStagingEntry.staging_entry_id
+        }
       );
       if (process.env.NODE_ENV !== 'test') {
-        logger.log(`Task created for staging_entry_id: ${newEntry.staging_entry_id}`);
+        logger.log(`Task created for staging_entry_id: ${newPrismaStagingEntry.staging_entry_id}`);
       }
     } catch (taskError) {
-      logger.error(`Failed to create process tracker task for staging_entry_id ${newEntry.staging_entry_id}:`, taskError);
+      logger.error(taskError as Error, { context: `Failed to create process tracker task for staging_entry_id ${newPrismaStagingEntry.staging_entry_id}` });
     }
 
-    return newEntry;
+    return newPrismaStagingEntry as StagingEntry; // Cast to Domain model
   } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
     const prismaError = error as PrismaError;
     if (process.env.NODE_ENV !== 'test') {
-      logger.error('Error creating staging entry:', error);
+      logger.error(prismaError, { context: 'Error creating staging entry' });
     }
     if (prismaError.name === 'PrismaClientValidationError' || (prismaError.code && prismaError.code.startsWith('P2'))) {
-        throw new Error(`Invalid input for staging entry creation. Details: ${prismaError.message.split('\n').slice(-2).join(' ')}`);
+        throw new ValidationError(`Invalid input for staging entry creation. Details: ${prismaError.message.split('\n').slice(-2).join(' ')}`);
     }
-    throw new Error('Could not create staging entry.');
+    throw new InternalServerError('Could not create staging entry.');
   }
 }
 
-async function listStagingEntries(account_id: string, queryParams: ListStagingEntriesQueryParams = {}): Promise<Array<PrismaStagingEntry & { account: { account_name: string, merchant_id: string } | null }>> {
+async function listStagingEntries(account_id: string, queryParams: ListStagingEntriesQueryParams = {}): Promise<Array<StagingEntry & { account: { account_name: string, merchant_id: string } | null }>> { // Return array of Domain StagingEntry
   const whereClause: Prisma.StagingEntryWhereInput = { account_id };
   if (queryParams.status) {
     whereClause.status = queryParams.status;
   }
 
   try {
-    const entries = await prisma.stagingEntry.findMany({
+    const prismaStagingEntries = await prisma.stagingEntry.findMany({
       where: whereClause,
       include: {
         account: {
@@ -119,40 +132,56 @@ async function listStagingEntries(account_id: string, queryParams: ListStagingEn
         }
       }
     });
-    return entries as Array<PrismaStagingEntry & { account: { account_name: string, merchant_id: string } | null }>;
+    return prismaStagingEntries as Array<StagingEntry & { account: { account_name: string, merchant_id: string } | null }>; // Cast to Domain model
   } catch (error) {
-    if (process.env.NODE_ENV !== 'test') {
-      logger.error('Error listing staging entries:', error);
+    if (error instanceof AppError) {
+      throw error;
     }
-    throw new Error('Could not list staging entries.');
+    if (process.env.NODE_ENV !== 'test') {
+      logger.error(error as Error, { context: 'Error listing staging entries' });
+    }
+    throw new InternalServerError('Could not list staging entries.');
   }
 }
 
 async function ingestStagingEntriesFromFile(accountId: string, file: MulterFile, processingMode: StagingEntryProcessingMode): Promise<IngestionResult> {
-  const results: Array<{ row_number: number, staging_entry_payload: StagingEntryData }> = [];
+  const results: Array<{ row_number: number, staging_entry_payload: CreateStagingEntryInput }> = []; // Use CreateStagingEntryInput
   const errors: IngestionError[] = [];
   let successfulIngestions = 0;
   let failedIngestions = 0;
   let rowNumber = 0;
 
-  let account: Pick<PrismaAccount, 'account_type' | 'account_id'> | null;
+  let account: Pick<PrismaAccount, 'account_type' | 'account_id'>; // Made non-null as findUniqueOrThrow guarantees it
   try {
-    account = await prisma.account.findUnique({
-      where: { account_id: accountId },
-      select: { account_type: true, account_id: true }
-    });
+    account = await findUniqueOrThrow<Pick<PrismaAccount, 'account_type' | 'account_id'>>(
+      Prisma.ModelName.Account,
+      { 
+        where: { account_id: accountId },
+        select: { account_type: true, account_id: true }
+      },
+      'Account',
+      accountId
+    );
   } catch (dbError) {
+    // findUniqueOrThrow will throw NotFoundError if not found.
+    // This catch block is for other potential errors during the find operation.
     if (process.env.NODE_ENV !== 'test') {
-      logger.error(`Database error fetching account ${accountId}:`, dbError);
+      logger.error(dbError as Error, { context: `Database error fetching account ${accountId}` });
     }
-    return Promise.reject(new Error(`Error fetching account details for ID ${accountId}.`));
+    // If it's already an AppError (like NotFoundError from the helper), rethrow it.
+    if (dbError instanceof AppError) {
+      return Promise.reject(dbError);
+    }
+    return Promise.reject(new InternalServerError(`Error fetching account details for ID ${accountId}.`));
   }
 
-  if (!account) {
-    return Promise.reject(new Error(`Account with ID ${accountId} not found.`));
-  }
+  // The null check for account is no longer needed due to findUniqueOrThrow
+  // if (!account) {
+  //   return Promise.reject(new NotFoundError('Account', accountId));
+  // }
   if (!account.account_type) {
-    return Promise.reject(new Error(`Account type not defined for account ID ${accountId}. Please ensure schema and data are correct.`));
+    // This indicates a data integrity issue or setup problem, might be a 500.
+    return Promise.reject(new InternalServerError(`Account type not defined for account ID ${accountId}. Please ensure schema and data are correct.`));
   }
 
   return new Promise((resolve, reject) => {
@@ -218,7 +247,7 @@ async function ingestStagingEntriesFromFile(accountId: string, file: MulterFile,
             });
             failedIngestions++;
           } else {
-            const stagingEntryData: StagingEntryData = {
+            const stagingEntryData: CreateStagingEntryInput = { // Use CreateStagingEntryInput
               entry_type: determinedPrismaEntryType,
               amount: parseFloat(data.amount),
               currency: data.currency,
@@ -244,7 +273,7 @@ async function ingestStagingEntriesFromFile(accountId: string, file: MulterFile,
           } catch (dbError) {
             const typedDbError = dbError as Error;
             if (process.env.NODE_ENV !== 'test') {
-              logger.error(`Error creating staging entry for row ${item.row_number}:`, typedDbError.message);
+              logger.error(typedDbError, { context: `Error creating staging entry for row ${item.row_number}` });
             }
             errors.push({
               row_number: item.row_number,
@@ -267,9 +296,9 @@ async function ingestStagingEntriesFromFile(accountId: string, file: MulterFile,
       })
       .on('error', (error: Error) => {
         if (process.env.NODE_ENV !== 'test') {
-            logger.error('Error parsing CSV:', error);
+            logger.error(error, { context: 'Error parsing CSV' });
         }
-        reject(new Error('Failed to parse CSV file.'));
+        reject(new ValidationError('Failed to parse CSV file.', error));
       });
   });
 }

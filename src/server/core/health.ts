@@ -19,7 +19,7 @@ const checkHealth = async (): Promise<HealthStatus> => {
         dbConnected = true;
         logger.log('Database connection test via Prisma successful.');
     } catch (error) {
-        logger.error('Database connection test via Prisma failed:', error);
+        logger.error(error as Error, { context: 'Database connection test via Prisma failed' });
         dbConnected = false;
     }
 

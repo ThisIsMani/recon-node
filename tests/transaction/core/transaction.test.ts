@@ -60,12 +60,24 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
     
     (mockPrisma.merchantAccount.findUnique as jest.Mock).mockResolvedValue(testMerchant);
     (mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback) => callback(mockTxClient));
+    const mockDate = new Date();
     (mockTxClient.transaction.create as jest.Mock).mockResolvedValue({ 
       transaction_id: 'new-tx-id', 
-      ...transactionShellData 
+      ...transactionShellData,
+      created_at: mockDate, // Add timestamps to mock
+      updated_at: mockDate,
+      logical_transaction_id: transactionShellData.logical_transaction_id || 'default-logical-id', // Ensure all fields of PrismaTransaction are present
+      version: transactionShellData.version || 1, // Ensure all fields of PrismaTransaction are present
+      discarded_at: null, // Ensure all fields of PrismaTransaction are present
     });
     (entryCore.createEntryInternal as jest.Mock)
-      .mockImplementation(async (entryData, tx) => ({ ...entryData, entry_id: `entry-${entryData.account_id}` }));
+      .mockImplementation(async (entryData, tx) => ({ 
+        ...entryData, 
+        entry_id: `entry-${entryData.account_id}`,
+        created_at: mockDate, // Add timestamps to mock entry if needed by its type
+        updated_at: mockDate,
+        discarded_at: null,
+       }));
   });
 
   afterEach(() => {
@@ -74,6 +86,34 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
   });
 
   it('should create a transaction and two entries successfully with balanced data', async () => {
+    const mockDate = new Date(); // Define mockDate here for the test scope
+    // Update the mock setup to use this specific mockDate for this test if it was defined in beforeEach
+    // Or ensure beforeEach's mockDate is accessible if that was the intent.
+    // For this fix, assuming we want a fresh mockDate for this specific test's assertion.
+    // If createTransactionInternal relies on the beforeEach mock, this might need adjustment.
+    // However, the error is in the assertion part, so this should fix it.
+    
+    // Re-setup the mock for transaction.create if it was using a mockDate from beforeEach
+    // This ensures the result.created_at will match this test's mockDate
+     (mockTxClient.transaction.create as jest.Mock).mockResolvedValueOnce({ 
+      transaction_id: 'new-tx-id', 
+      ...transactionShellData,
+      created_at: mockDate, 
+      updated_at: mockDate,
+      logical_transaction_id: transactionShellData.logical_transaction_id || 'default-logical-id', 
+      version: transactionShellData.version || 1, 
+      discarded_at: null, 
+    });
+    // Also re-setup entryCore mock if it used a different mockDate
+    (entryCore.createEntryInternal as jest.Mock).mockImplementation(async (entryData, tx) => ({ 
+        ...entryData, 
+        entry_id: `entry-${entryData.account_id}`,
+        created_at: mockDate, 
+        updated_at: mockDate,
+        discarded_at: null,
+       }));
+
+
     const result = await createTransactionInternal(transactionShellData, actualEntryData, expectedEntryData);
 
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
@@ -88,6 +128,8 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
       mockTxClient
     );
     expect(result.transaction_id).toBe('new-tx-id');
+    expect(result).toHaveProperty('created_at', mockDate); // Check for timestamps
+    expect(result).toHaveProperty('updated_at', mockDate);
     expect(result.entries).toHaveLength(2);
     expect(result.entries[0].account_id).toBe('account-actual');
     expect(result.entries[1].account_id).toBe('account-expected');
@@ -203,7 +245,16 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
     } as unknown as jest.Mocked<Prisma.TransactionClient>;
 
     (mockCallingTxProvided.merchantAccount.findUnique as jest.Mock).mockResolvedValue(testMerchant);
-    (mockCallingTxProvided.transaction.create as jest.Mock).mockResolvedValue({ transaction_id: 'new-tx-id-from-callingTx', ...transactionShellData });
+    const mockDateCallingTx = new Date();
+    (mockCallingTxProvided.transaction.create as jest.Mock).mockResolvedValue({ 
+      transaction_id: 'new-tx-id-from-callingTx', 
+      ...transactionShellData,
+      created_at: mockDateCallingTx, // Add timestamps
+      updated_at: mockDateCallingTx,
+      logical_transaction_id: transactionShellData.logical_transaction_id || 'default-logical-id-callingtx',
+      version: transactionShellData.version || 1,
+      discarded_at: null,
+    });
 
     await createTransactionInternal(transactionShellData, actualEntryData, expectedEntryData, mockCallingTxProvided);
 

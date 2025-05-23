@@ -1,5 +1,6 @@
 import express, { Router, Request, Response, NextFunction, RequestHandler } from 'express';
 import { createMerchant, listMerchants } from '../../core/merchant';
+import { CreateMerchantRequest, MerchantResponse } from '../../api_models/merchant.types'; // Import new types
 
 const router: Router = express.Router();
 
@@ -14,32 +15,9 @@ const router: Router = express.Router();
  * @swagger
  * components:
  *   schemas:
- *     Merchant:
- *       type: object
- *       required:
- *         - merchant_id
- *         - merchant_name
- *       properties:
- *         merchant_id:
- *           type: string
- *           description: Unique identifier for the merchant.
- *           example: "merchant001"
- *         merchant_name:
- *           type: string
- *           description: Name of the merchant.
- *           example: "Test Merchant One"
- *     NewMerchant:
- *       type: object
- *       required:
- *         - merchant_id
- *         - merchant_name
- *       properties:
- *         merchant_id:
- *           type: string
- *           description: Unique identifier for the merchant.
- *         merchant_name:
- *           type: string
- *           description: Name of the merchant.
+ *     # Merchant and NewMerchant schemas are now defined in merchant.types.ts
+ *     # and will be referenced directly by their names:
+ *     # CreateMerchantRequest, MerchantResponse, MerchantsListResponse
  */
 
 /**
@@ -53,7 +31,7 @@ const router: Router = express.Router();
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/NewMerchant'
+ *             $ref: '#/components/schemas/CreateMerchantRequest' # Updated schema ref
  *     responses:
  *       201:
  *         description: Merchant account created successfully.
@@ -65,7 +43,7 @@ const router: Router = express.Router();
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Merchant'
+ *               $ref: '#/components/schemas/MerchantResponse' # Updated schema ref
  *       400:
  *         description: Bad request (e.g., missing fields, invalid data type).
  *         content:
@@ -89,32 +67,39 @@ const router: Router = express.Router();
  *       500:
  *         description: Internal server error.
  */
-const createMerchantHandler: RequestHandler = async (req, res, next) => {
+const createMerchantHandler: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { merchant_id, merchant_name } = req.body;
+        // Use the new API model for request body typing
+        const { merchant_id, name } = req.body as CreateMerchantRequest;
 
-        if (!merchant_id || !merchant_name) {
-            res.status(400).json({ error: 'merchant_id and merchant_name are required.' });
+        // Basic validation (more robust validation can be added, e.g., with Zod/Joi)
+        if (!merchant_id || !name) {
+            // Consider using AppError for consistency if error handling is standardized
+            res.status(400).json({ error: 'merchant_id and name are required.' });
             return;
         }
-        if (typeof merchant_id !== 'string' || typeof merchant_name !== 'string') {
-            res.status(400).json({ error: 'merchant_id and merchant_name must be strings.' });
+        if (typeof merchant_id !== 'string' || typeof name !== 'string') {
+            res.status(400).json({ error: 'merchant_id and name must be strings.' });
             return;
         }
+        // The core `createMerchant` function might need to be updated to accept `name` instead of `merchant_name`
+        // or we map it here. For now, assuming core function expects `merchant_id` and `merchant_name`.
+        // This highlights where transformation/mapping logic will be needed.
+        const newMerchantData = await createMerchant({ merchant_id, merchant_name: name });
 
-        const newMerchant = await createMerchant({ merchant_id, merchant_name });
-        res.status(201).location(`/api/merchants/${newMerchant.merchant_id}`).json(newMerchant);
+        // Manually map Prisma model to API model
+        const responseMerchant: MerchantResponse = {
+            id: newMerchantData.merchant_id, // Map merchant_id to id
+            name: newMerchantData.merchant_name, // Map merchant_name to name
+            created_at: newMerchantData.created_at,
+            updated_at: newMerchantData.updated_at,
+        };
+        res.status(201).location(`/api/merchants/${responseMerchant.id}`).json(responseMerchant);
     } catch (error) {
-        // It's better to let the centralized error handler manage this,
-        // but for specific status codes like 409, handling it here is okay.
-        if (error instanceof Error && error.message.includes('already exists')) {
-            res.status(409).json({ error: error.message });
-            return;
-        }
-        next(error); // Pass other errors to the centralized error handler
+        next(error);
     }
 };
-router.post('/', createMerchantHandler);
+router.post('/', createMerchantHandler as RequestHandler); // Cast if Express types clash
 
 // GET /api/merchants - List all merchants
 /**
@@ -129,20 +114,25 @@ router.post('/', createMerchantHandler);
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Merchant'
+ *               $ref: '#/components/schemas/MerchantsListResponse' # Updated schema ref
  *       500:
  *         description: Internal server error.
  */
-const listMerchantsHandler: RequestHandler = async (req, res, next) => {
+const listMerchantsHandler: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const merchants = await listMerchants();
-        res.status(200).json(merchants);
+        const merchantDataList = await listMerchants();
+        // Manually map array of Prisma models to array of API models
+        const responseMerchants: MerchantResponse[] = merchantDataList.map(merchantData => ({
+            id: merchantData.merchant_id,
+            name: merchantData.merchant_name,
+            created_at: merchantData.created_at,
+            updated_at: merchantData.updated_at,
+        }));
+        res.status(200).json(responseMerchants);
     } catch (error) {
         next(error);
     }
 };
-router.get('/', listMerchantsHandler);
+router.get('/', listMerchantsHandler as RequestHandler); // Cast if Express types clash
 
 export default router;

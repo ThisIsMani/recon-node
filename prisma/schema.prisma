@@ -10,6 +10,8 @@ generator client {
 model MerchantAccount {
   merchant_id   String @id @db.VarChar(255)
   merchant_name String @db.VarChar(255)
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
   accounts      Account[]       // Relation to multiple accounts
   transactions  Transaction[]   // Relation to multiple transactions
   reconRules    ReconRule[]     // Relation to recon rules
