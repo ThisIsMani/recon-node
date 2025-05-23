@@ -7,14 +7,10 @@ import { Transaction } from '../../domain_models/transaction.types'; // Import D
 import * as entryCore from '../entry'; // Now TS
 import type { CreateEntryInternalData as EntryCoreCreateEntryData } from '../entry'; // Explicit type import
 import { AppError, InternalServerError } from '../../../errors/AppError'; // Import AppError and InternalServerError
+import { TransactionValidationError, TransactionNotFoundError, BalanceError as TransactionBalanceError, TransactionCreationError } from './errors';
 
-// Custom Error for balance issues
-export class BalanceError extends AppError {
-  constructor(message: string) {
-    super(message, 400, 'ERR_BALANCE', true); // HTTP 400, specific error code
-    this.name = 'BalanceError'; // Overwrite AppError's default name
-  }
-}
+// Re-export BalanceError for backward compatibility
+export { BalanceError } from './errors';
 
 // Interface for query parameters when listing transactions
 interface ListTransactionsQueryParams {
@@ -103,7 +99,7 @@ const listTransactions = async (merchantId: string, queryParams: ListTransaction
       throw error;
     }
     logger.error(error as Error, { context: `Error fetching transactions for merchant ${merchantId}` });
-    throw new InternalServerError('Could not retrieve transactions.');
+    throw new InternalServerError('Could not retrieve transactions.', { merchantId }, error as Error);
   }
 };
 
@@ -125,34 +121,55 @@ const createTransactionInternal = async (
   } = transactionShellData;
 
   if (!merchant_id || !status) {
-    throw new Error('Missing required fields for transaction shell: merchant_id, status.');
+    throw new TransactionValidationError('Missing required fields for transaction shell: merchant_id, status.', {
+      missingFields: ['merchant_id', 'status'].filter(field => !transactionShellData[field as keyof TransactionShellData])
+    });
   }
   if (!Object.values(TransactionStatus).includes(status)) {
-    throw new Error(`Invalid transaction status: ${status}`);
+    throw new TransactionValidationError(`Invalid transaction status: ${status}`, {
+      providedStatus: status,
+      validStatuses: Object.values(TransactionStatus)
+    });
   }
   if (!actualEntryData || !expectedEntryData) {
-    throw new Error('Actual and expected entry data must be provided.');
+    throw new TransactionValidationError('Actual and expected entry data must be provided.', {
+      missingData: {
+        actualEntryData: !actualEntryData,
+        expectedEntryData: !expectedEntryData
+      }
+    });
   }
 
   const prismaClient = callingTx || prisma;
 
   const merchant = await prismaClient.merchantAccount.findUnique({ where: { merchant_id } });
   if (!merchant) {
-    throw new Error(`Merchant with ID ${merchant_id} not found.`);
+    throw new TransactionValidationError(`Merchant with ID ${merchant_id} not found.`, {
+      merchantId: merchant_id
+    });
   }
 
   const actualAmount = new Prisma.Decimal(actualEntryData.amount.toString());
   const expectedAmount = new Prisma.Decimal(expectedEntryData.amount.toString());
 
   if (actualAmount.comparedTo(expectedAmount) !== 0) {
-    throw new BalanceError(`Amounts do not balance: actual ${actualAmount}, expected ${expectedAmount}`);
+    throw new TransactionBalanceError(`Amounts do not balance: actual ${actualAmount}, expected ${expectedAmount}`, {
+      actualAmount: actualAmount.toString(),
+      expectedAmount: expectedAmount.toString()
+    });
   }
   if (actualEntryData.currency !== expectedEntryData.currency) {
-    throw new BalanceError(`Currencies do not match: actual ${actualEntryData.currency}, expected ${expectedEntryData.currency}`);
+    throw new TransactionBalanceError(`Currencies do not match: actual ${actualEntryData.currency}, expected ${expectedEntryData.currency}`, {
+      actualCurrency: actualEntryData.currency,
+      expectedCurrency: expectedEntryData.currency
+    });
   }
   if (!((actualEntryData.entry_type === EntryType.DEBIT && expectedEntryData.entry_type === EntryType.CREDIT) ||
         (actualEntryData.entry_type === EntryType.CREDIT && expectedEntryData.entry_type === EntryType.DEBIT))) {
-    throw new BalanceError('Entry types must be one DEBIT and one CREDIT.');
+    throw new TransactionBalanceError('Entry types must be one DEBIT and one CREDIT.', {
+      actualEntryType: actualEntryData.entry_type,
+      expectedEntryType: expectedEntryData.entry_type
+    });
   }
   
   try {
@@ -195,7 +212,14 @@ const createTransactionInternal = async (
       throw error;
     }
     logger.error(error as Error, { context: `Error during atomic transaction creation for merchant ${merchant_id}` });
-    throw new InternalServerError('Could not create internal transaction with entries due to an internal error.');
+    throw new TransactionCreationError('Could not create internal transaction with entries due to an internal error.', {
+      merchantId: merchant_id,
+      transactionData: {
+        status,
+        logical_transaction_id,
+        version
+      }
+    }, error as Error);
   }
 };
 

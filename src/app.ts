@@ -32,24 +32,45 @@ app.get('/', (req: Request, res: Response) => {
 
 // Centralized error handling middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    logger.error(err); // Log the full error object
+    // Get request ID from context if available
+    const requestId = req.context?.requestId || 'unknown';
+    
+    // Enhanced logging with request context
+    logger.error('Request error', {
+        error: err.message,
+        stack: err.stack,
+        url: req.originalUrl,
+        method: req.method,
+        requestId: requestId,
+        // Include the cause chain if it's an AppError with a cause
+        ...(err instanceof AppError && err.cause ? { cause: err.cause.message } : {})
+    });
 
     if (err instanceof AppError) {
+        // For AppError instances, use the defined status code and error information
         res.status(err.statusCode).json({
             error: {
-                message: err.message,
                 code: err.errorCode,
-                details: err.details,
-                // stack: process.env.NODE_ENV === 'development' ? err.stack : undefined, // Optional
+                message: err.message,
+                details: err.details || undefined,
+                requestId: requestId,
+                // Include stack trace only in development
+                ...(process.env.NODE_ENV === 'development' ? { stack: err.stack } : {})
             }
         });
     } else {
-        // Handle non-AppError errors (e.g., generic Error, system errors)
+        // For non-AppError errors (e.g., generic Error, system errors)
+        // Convert to standard response format
         res.status(500).json({
             error: {
+                code: 'ERR_INTERNAL_SERVER',
                 message: 'An unexpected internal server error occurred.',
-                code: 'ERR_UNHANDLED',
-                // stack: process.env.NODE_ENV === 'development' ? err.stack : undefined, // Optional
+                requestId: requestId,
+                // Include original error message and stack trace only in development
+                ...(process.env.NODE_ENV === 'development' ? { 
+                    originalError: err.message,
+                    stack: err.stack 
+                } : {})
             }
         });
     }

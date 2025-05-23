@@ -14,6 +14,9 @@ export const requestContextMiddleware = (req: Request, res: Response, next: Next
   }
   const requestId = incomingRequestId || uuidv4();
 
+  // Attach to request object for direct access in middleware and controllers
+  req.context = { requestId };
+
   requestContextStorage.run({ requestId }, () => {
     // Set X-Request-ID header for client response
     res.setHeader('X-Request-ID', requestId);

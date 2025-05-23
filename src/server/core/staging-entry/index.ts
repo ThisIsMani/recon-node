@@ -298,7 +298,7 @@ async function ingestStagingEntriesFromFile(accountId: string, file: MulterFile,
         if (process.env.NODE_ENV !== 'test') {
             logger.error(error, { context: 'Error parsing CSV' });
         }
-        reject(new ValidationError('Failed to parse CSV file.', error));
+        reject(new ValidationError('Failed to parse CSV file.', { originalError: error.message }));
       });
   });
 }
