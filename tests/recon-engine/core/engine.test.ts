@@ -42,6 +42,45 @@ describe('Recon Engine Core Logic - generateTransactionEntriesFromStaging', () =
     };
   });
 
+  test('should throw error when staging entry currency does not match account currency', async () => {
+    // Mock account with different currency
+    (mockPrisma.account.findUnique as jest.Mock).mockResolvedValue({
+      currency: 'EUR' // Different from staging entry currency (USD)
+    });
+
+    await expect(
+      generateTransactionEntriesFromStaging(mockStagingEntry, merchantId)
+    ).rejects.toThrow('Currency mismatch: staging entry has USD but account has EUR');
+  });
+
+  test('should throw error when account is not found', async () => {
+    (mockPrisma.account.findUnique as jest.Mock).mockResolvedValue(null);
+
+    await expect(
+      generateTransactionEntriesFromStaging(mockStagingEntry, merchantId)
+    ).rejects.toThrow('Account account-from not found');
+  });
+
+  test('should throw error when contra account currency does not match', async () => {
+    const mockRule = {
+      id: 'rule-1',
+      merchant_id: merchantId,
+      account_one_id: mockStagingEntry.account_id,
+      account_two_id: 'account-to',
+    };
+
+    // Mock primary account with matching currency
+    (mockPrisma.account.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ currency: 'USD' })  // First call for primary account
+      .mockResolvedValueOnce({ currency: 'EUR' }); // Second call for contra account
+
+    (mockPrisma.reconRule.findFirst as jest.Mock).mockResolvedValue(mockRule);
+
+    await expect(
+      generateTransactionEntriesFromStaging(mockStagingEntry, merchantId)
+    ).rejects.toThrow('Currency mismatch: staging entry has USD but contra account has EUR');
+  });
+
   test('should generate actual and expected entries when a recon rule (staging acc as account_one_id) is found', async () => {
     const mockRule = {
       id: 'rule-1',
@@ -49,6 +88,12 @@ describe('Recon Engine Core Logic - generateTransactionEntriesFromStaging', () =
       account_one_id: mockStagingEntry.account_id,
       account_two_id: 'account-to',
     };
+
+    // Mock both accounts with matching currency
+    (mockPrisma.account.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ currency: 'USD' })  // Primary account
+      .mockResolvedValueOnce({ currency: 'USD' }); // Contra account
+
     (mockPrisma.reconRule.findFirst as jest.Mock).mockImplementation(async (args) => {
       if (
         args.where.merchant_id === merchantId &&
@@ -71,7 +116,10 @@ describe('Recon Engine Core Logic - generateTransactionEntriesFromStaging', () =
   });
 
   test('should throw NoReconRuleFoundError if no recon rule (staging acc as account_one_id) is found', async () => {
+    // Mock account with matching currency first
+    (mockPrisma.account.findUnique as jest.Mock).mockResolvedValue({ currency: 'USD' });
     (mockPrisma.reconRule.findFirst as jest.Mock).mockResolvedValue(null);
+    
     const expectedErrorMessage = `No reconciliation rule found for merchant ${merchantId} where account ${mockStagingEntry.account_id} is account_one_id (for generating transaction entries)`;
     await expect(
       generateTransactionEntriesFromStaging(mockStagingEntry, merchantId)
@@ -318,6 +366,11 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
     });
 
     test('should create a new transaction with POSTED and EXPECTED entries', async () => {
+      // Mock both accounts with matching currency
+      (mockPrisma.account.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ currency: 'EUR' })  // Primary account
+        .mockResolvedValueOnce({ currency: 'EUR' }); // Contra account
+
       (mockPrisma.reconRule.findFirst as jest.Mock).mockResolvedValueOnce({
         id: 'rule-tx-mode-success',
         merchant_id: merchantId,
@@ -403,6 +456,8 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
     });
 
     test('should handle NoReconRuleFoundError from generateTransactionEntriesFromStaging in TRANSACTION mode', async () => {
+      // Mock account with matching currency first
+      (mockPrisma.account.findUnique as jest.Mock).mockResolvedValue({ currency: 'EUR' });
       (mockPrisma.reconRule.findFirst as jest.Mock).mockResolvedValueOnce(null); 
       
       const expectedErrorMessage = `No reconciliation rule found for merchant ${merchantId} where account ${mockStagingEntry.account_id} is account_one_id (for generating transaction entries)`;
@@ -426,6 +481,11 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
 
     test('should handle BalanceError from createTransactionInternal in TRANSACTION mode', async () => {
       const originalFindFirstMock = mockPrisma.reconRule.findFirst;
+
+      // Mock both accounts with matching currency
+      (mockPrisma.account.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ currency: 'EUR' })  // Primary account
+        .mockResolvedValueOnce({ currency: 'EUR' }); // Contra account
 
       (mockPrisma.reconRule.findFirst as jest.Mock) = jest.fn().mockResolvedValue({
         id: 'rule-for-tx-balance-error',

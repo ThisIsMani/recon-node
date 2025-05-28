@@ -146,6 +146,54 @@ describe('TransactionCreationTask', () => {
       
       expect(mockTask.validate).toHaveBeenCalled();
     });
+
+    it('should fail validation when staging entry currency does not match account currency', async () => {
+      // Reset the mock to use original implementation
+      jest.spyOn(TransactionTask, 'decide').mockRestore();
+      
+      // Create staging entry with mismatched currency
+      const mismatchedStagingEntry = {
+        ...validStagingEntry,
+        currency: 'EUR', // Different from account currency (USD)
+      };
+      
+      (findUniqueOrThrow as jest.Mock).mockResolvedValue(mismatchedStagingEntry);
+      
+      const task = await TransactionTask.decide(baseProcessTrackerTask);
+      expect(task).not.toBeNull();
+      
+      const result = await task!.validate();
+      
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(ValidationError);
+        expect(result.error.message).toContain('Currency mismatch between staging entry and account');
+      }
+    });
+
+    it('should fail validation when account is missing', async () => {
+      // Reset the mock to use original implementation
+      jest.spyOn(TransactionTask, 'decide').mockRestore();
+      
+      // Create staging entry without account
+      const stagingEntryWithoutAccount = {
+        ...validStagingEntry,
+        account: null,
+      } as any;
+      
+      (findUniqueOrThrow as jest.Mock).mockResolvedValue(stagingEntryWithoutAccount);
+      
+      const task = await TransactionTask.decide(baseProcessTrackerTask);
+      expect(task).not.toBeNull();
+      
+      const result = await task!.validate();
+      
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(ValidationError);
+        expect(result.error.message).toContain('Merchant ID not found for staging entry');
+      }
+    });
   });
   
   describe('run method', () => {

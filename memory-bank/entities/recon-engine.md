@@ -6,6 +6,9 @@ The Recon Engine is the core component responsible for processing `StagingEntry`
 
 -   **`generateTransactionEntriesFromStaging(stagingEntry, merchantId)`** (`src/server/core/recon-engine/engine.ts`)
     -   Takes a `StagingEntry` and `merchantId`.
+    -   **Currency Validation:** Validates that the `stagingEntry.currency` matches the `account.currency` and `contra_account.currency`.
+        -   Throws `AppError` with `ERR_CURRENCY_MISMATCH` if currencies don't match.
+        -   Throws `AppError` with `ERR_ACCOUNT_NOT_FOUND` if accounts are not found.
     -   **Rule Selection:** Finds an applicable `ReconRule` where `merchant_id` matches and `stagingEntry.account_id` matches `account_one_id` in the rule. This assumes that for generating new transaction pairs (typical in `TRANSACTION` mode), the `stagingEntry.account_id` represents the source/initiating account.
         -   Throws `NoReconRuleFoundError` if no such rule applies (e.g., `No reconciliation rule found for merchant X where account Y is account_one_id...`).
     -   Determines the `contra_account_id` (which will be `account_two_id` from the selected rule) and `expectedEntryType` based on the rule and the staging entry.
@@ -97,12 +100,14 @@ The Recon Engine uses a task-based architecture:
     -   **`TransactionCreationTask`** (`src/server/core/recon-engine/task/transaction-task.ts`)
         -   Handles staging entries in `TRANSACTION` mode
         -   Creates new transaction pairs with one posted and one expected entry
-        -   Now has 100% test coverage with comprehensive tests for all methods
+        -   **Currency Validation:** Validates that `stagingEntry.currency` matches `account.currency` in the `validate()` method
+        -   Now has 100% test coverage with comprehensive tests for all methods including currency validation
     
     -   **`ExpectedEntryMatchingTask`** (`src/server/core/recon-engine/task/matching-task.ts`)
         -   Handles staging entries in `CONFIRMATION` mode
         -   Attempts to match against existing expected entries
         -   Creates evolved transactions when matches are found
+        -   **Currency Validation:** Validates that `stagingEntry.currency` matches `account.currency` in the `validate()` method
         -   Still needs improved test coverage (currently at 38.59%)
 
 -   **`TaskManager`** (`src/server/core/recon-engine/task/task-manager.ts`)
@@ -145,6 +150,11 @@ Areas that still need coverage improvement:
 -   **Conditional Matching (CONFIRMATION mode):** The engine only attempts to match/fulfill if the `stagingEntry.account_id` corresponds to `account_two_id` in an applicable `ReconRule` (i.e., it's an "expecting" account) and the `stagingEntry` has an `order_id`.
 -   **Transaction Evolution (CONFIRMATION mode):** When an expected entry is fulfilled, its original transaction is archived, and a new, evolved transaction (incremented version, status `POSTED`) is created, linking back to the original.
 -   **Direct Transaction Creation (TRANSACTION mode):** Utilizes `generateTransactionEntriesFromStaging` (which now specifically uses `account_one_id` from the rule) to form a new transaction with one `POSTED` leg (from staging entry) and one `EXPECTED` leg.
+-   **Currency Validation:** The engine enforces strict currency matching across all operations:
+    -   Staging entries must have the same currency as their associated accounts
+    -   In transaction creation (TRANSACTION mode), both the source account and contra account must have matching currencies
+    -   In matching (CONFIRMATION mode), the staging entry currency must match the account currency
+    -   Currency mismatches result in `NEEDS_MANUAL_REVIEW` status with detailed error information
 -   **Atomicity:** Uses `prisma.$transaction` for operations that must succeed or fail together (e.g., creating/updating transactions and entries, updating staging entry status).
 -   **Error States:** `StagingEntry` records are moved to `NEEDS_MANUAL_REVIEW` upon any processing error, with error details stored in their metadata.
 -   **Idempotency (via Process Tracker):** The consumer attempts to ensure tasks are processed once by updating task statuses. (Further enhancements for strict idempotency might be needed for retries on transient errors).

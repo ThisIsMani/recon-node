@@ -30,6 +30,25 @@ type GeneratedEntryPair = [CreateEntryInternalData, CreateEntryInternalData];
 async function generateTransactionEntriesFromStaging(stagingEntry: StagingEntry, merchantId: string): Promise<GeneratedEntryPair> {
   const order_id = (stagingEntry.metadata as Prisma.JsonObject)?.order_id as string | undefined;
 
+  // Validate currency match between staging entry and its account
+  const account = await prisma.account.findUnique({
+    where: { account_id: stagingEntry.account_id },
+    select: { currency: true }
+  });
+
+  if (!account) {
+    throw new AppError(`Account ${stagingEntry.account_id} not found`, 404, 'ERR_ACCOUNT_NOT_FOUND', true);
+  }
+
+  if (stagingEntry.currency !== account.currency) {
+    throw new AppError(
+      `Currency mismatch: staging entry has ${stagingEntry.currency} but account has ${account.currency}`,
+      400,
+      'ERR_CURRENCY_MISMATCH',
+      true
+    );
+  }
+
   const actualEntryData: CreateEntryInternalData = {
     account_id: stagingEntry.account_id,
     entry_type: stagingEntry.entry_type as EntryType, // Cast if StagingEntry.entry_type is string
@@ -59,6 +78,26 @@ async function generateTransactionEntriesFromStaging(stagingEntry: StagingEntry,
   }
 
   const contra_account_id = reconRule.account_two_id;
+  
+  // Validate that the contra account has the same currency
+  const contraAccount = await prisma.account.findUnique({
+    where: { account_id: contra_account_id },
+    select: { currency: true }
+  });
+
+  if (!contraAccount) {
+    throw new AppError(`Contra account ${contra_account_id} not found`, 404, 'ERR_ACCOUNT_NOT_FOUND', true);
+  }
+
+  if (stagingEntry.currency !== contraAccount.currency) {
+    throw new AppError(
+      `Currency mismatch: staging entry has ${stagingEntry.currency} but contra account has ${contraAccount.currency}`,
+      400,
+      'ERR_CURRENCY_MISMATCH',
+      true
+    );
+  }
+
   const expectedEntryType = stagingEntry.entry_type === EntryType.DEBIT ? EntryType.CREDIT : EntryType.DEBIT;
 
   const expectedEntryData: CreateEntryInternalData = {

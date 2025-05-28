@@ -96,6 +96,17 @@ export class TransactionTask extends BaseTask implements ReconTask {
       }));
     }
     
+    // Validate currency match between staging entry and account
+    if (this.currentStagingEntry.currency !== this.currentStagingEntry.account.currency) {
+      return err(new ValidationError('Currency mismatch between staging entry and account', { 
+        stagingEntryId: this.currentStagingEntry.staging_entry_id,
+        stagingEntryCurrency: this.currentStagingEntry.currency,
+        accountCurrency: this.currentStagingEntry.account.currency,
+        accountId: this.currentStagingEntry.account_id,
+        taskId: this.taskId 
+      }));
+    }
+    
     return ok(undefined);
   }
 
