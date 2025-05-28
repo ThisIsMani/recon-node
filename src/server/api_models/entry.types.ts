@@ -6,6 +6,23 @@ import { Decimal } from '@prisma/client/runtime/library'; // For amount
  * @openapi
  * components:
  *   schemas:
+ *     TransactionInfo:
+ *       type: object
+ *       properties:
+ *         transaction_id:
+ *           type: string
+ *           format: cuid
+ *           description: The ID of the transaction.
+ *         logical_transaction_id:
+ *           type: string
+ *           description: The logical ID of the transaction (for grouping related transactions).
+ *         status:
+ *           type: string
+ *           enum: [EXPECTED, POSTED, ARCHIVED, MISMATCH]
+ *           description: The status of the transaction.
+ *         version:
+ *           type: integer
+ *           description: The version of the transaction (incremented when transactions evolve).
  *     EntryResponse:
  *       type: object
  *       properties:
@@ -40,6 +57,10 @@ import { Decimal } from '@prisma/client/runtime/library'; // For amount
  *           type: object
  *           nullable: true
  *           description: Additional metadata for the entry.
+ *         transaction:
+ *           $ref: '#/components/schemas/TransactionInfo'
+ *           nullable: true
+ *           description: Information about the associated transaction.
  *         discarded_at:
  *           type: string
  *           format: date-time
@@ -73,6 +94,13 @@ import { Decimal } from '@prisma/client/runtime/library'; // For amount
 // Entries are typically created via internal processes (e.g., transaction creation).
 // If direct API creation is needed, a CreateEntryRequest would be defined here.
 
+export interface TransactionInfo {
+  transaction_id: string;
+  logical_transaction_id: string;
+  status: string;
+  version: number;
+}
+
 export interface EntryResponse {
   entry_id: string;
   account_id: string;
@@ -83,6 +111,7 @@ export interface EntryResponse {
   status: PrismaEntryStatus;
   effective_date: Date; // Or string if formatted
   metadata?: any | null;
+  transaction?: TransactionInfo | null;
   discarded_at?: Date | null;
   created_at: Date;
   updated_at: Date;

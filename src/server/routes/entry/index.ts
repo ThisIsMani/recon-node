@@ -23,7 +23,38 @@ interface EntryQuery {
  *   name: Entries
  *   description: Ledger entry management (currently, only listing is supported).
  */
-// ... (Swagger definitions remain the same) ...
+
+/**
+ * @swagger
+ * /accounts/{account_id}/entries:
+ *   get:
+ *     summary: List all entries for an account
+ *     tags: [Entries]
+ *     parameters:
+ *       - in: path
+ *         name: account_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the account to list entries for
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         schema:
+ *           $ref: '#/components/schemas/EntryStatusEnum'
+ *         description: Filter entries by status
+ *     responses:
+ *       200:
+ *         description: List of entries for the account
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EntriesListResponse'
+ *       404:
+ *         description: Account not found
+ *       500:
+ *         description: Internal server error
+ */
 
 const listEntriesHandler: RequestHandler<EntryRouteParams, any, any, EntryQuery> = async (req, res) => {
   const { account_id } = req.params; 
@@ -49,6 +80,12 @@ const listEntriesHandler: RequestHandler<EntryRouteParams, any, any, EntryQuery>
         status: entryData.status,
         effective_date: entryData.effective_date,
         metadata: entryData.metadata,
+        transaction: entryData.transaction ? {
+          transaction_id: entryData.transaction.transaction_id,
+          logical_transaction_id: entryData.transaction.logical_transaction_id,
+          status: entryData.transaction.status,
+          version: entryData.transaction.version
+        } : null,
         discarded_at: entryData.discarded_at,
         created_at: entryData.created_at,
         updated_at: entryData.updated_at,

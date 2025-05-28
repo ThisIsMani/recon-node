@@ -127,6 +127,12 @@ describe('Entry API - GET /api/accounts/:account_id/entries', () => {
       expect(new Date(entry.created_at).toISOString()).toBe(entry.created_at);
       expect(entry).toHaveProperty('updated_at');
       expect(new Date(entry.updated_at).toISOString()).toBe(entry.updated_at);
+      // Check for transaction
+      expect(entry).toHaveProperty('transaction');
+      expect(entry.transaction).toHaveProperty('transaction_id', dummyTransaction.transaction_id);
+      expect(entry.transaction).toHaveProperty('logical_transaction_id');
+      expect(entry.transaction).toHaveProperty('status');
+      expect(entry.transaction).toHaveProperty('version');
       // metadata and discarded_at are optional
       if (entry.hasOwnProperty('metadata')) {
         expect(entry).toHaveProperty('metadata');
@@ -194,5 +200,19 @@ describe('Entry API - GET /api/accounts/:account_id/entries', () => {
       const date2 = new Date(response.body[i+1].effective_date);
       expect(date1.getTime()).toBeGreaterThanOrEqual(date2.getTime());
     }
+  });
+
+  it('should include transaction in the entry response', async () => {
+    const response = await request(server).get(`/api/accounts/${testAccount.account_id}/entries`);
+    expect(response.statusCode).toBe(200);
+    expect(response.body.length).toBeGreaterThan(0);
+    
+    const entry = response.body[0];
+    expect(entry).toHaveProperty('transaction');
+    expect(entry.transaction).not.toBeNull();
+    expect(entry.transaction).toHaveProperty('transaction_id', dummyTransaction.transaction_id);
+    expect(entry.transaction).toHaveProperty('logical_transaction_id');
+    expect(entry.transaction).toHaveProperty('status', dummyTransaction.status);
+    expect(entry.transaction).toHaveProperty('version');
   });
 });

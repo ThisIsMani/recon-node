@@ -74,6 +74,14 @@ describe('Recon Rules API Endpoints', () => {
       expect(response.body.account_one_id).toBe(account1_m1.account_id);
       expect(response.body.account_two_id).toBe(account2_m1.account_id);
       expect(response.body.merchant_id).toBe(merchant1.merchant_id);
+      expect(response.body).toHaveProperty('accountOne');
+      expect(response.body.accountOne).toHaveProperty('account_id', account1_m1.account_id);
+      expect(response.body.accountOne).toHaveProperty('account_name', account1_m1.account_name);
+      expect(response.body.accountOne).toHaveProperty('merchant_id', merchant1.merchant_id);
+      expect(response.body).toHaveProperty('accountTwo');
+      expect(response.body.accountTwo).toHaveProperty('account_id', account2_m1.account_id);
+      expect(response.body.accountTwo).toHaveProperty('account_name', account2_m1.account_name);
+      expect(response.body.accountTwo).toHaveProperty('merchant_id', merchant1.merchant_id);
       expect(response.body).toHaveProperty('created_at');
       expect(response.body).toHaveProperty('updated_at');
       expect(new Date(response.body.created_at).toISOString()).toBe(response.body.created_at);
@@ -151,22 +159,27 @@ describe('Recon Rules API Endpoints', () => {
         expect(rule).toHaveProperty('merchant_id', merchant1.merchant_id);
         expect(rule).toHaveProperty('account_one_id');
         expect(rule).toHaveProperty('account_two_id');
+        expect(rule).toHaveProperty('accountOne');
+        expect(rule.accountOne).toHaveProperty('account_id');
+        expect(rule.accountOne).toHaveProperty('account_name');
+        expect(rule.accountOne).toHaveProperty('merchant_id', merchant1.merchant_id);
+        expect(rule).toHaveProperty('accountTwo');
+        expect(rule.accountTwo).toHaveProperty('account_id');
+        expect(rule.accountTwo).toHaveProperty('account_name');
+        expect(rule.accountTwo).toHaveProperty('merchant_id', merchant1.merchant_id);
         expect(rule).toHaveProperty('created_at');
         expect(rule).toHaveProperty('updated_at');
-        // accountOne and accountTwo are not part of ReconRuleResponse by default
-        // expect(rule).toHaveProperty('accountOne'); 
-        // expect(rule).toHaveProperty('accountTwo');
       });
 
       const rule1 = response.body.find((r: any) => r.account_one_id === account1_m1.account_id && r.account_two_id === account2_m1.account_id);
       expect(rule1).toBeDefined();
-      // if (rule1.accountOne) expect(rule1.accountOne.account_name).toBe(account1_m1.account_name); // Conditional check if API might include it
-      // if (rule1.accountTwo) expect(rule1.accountTwo.account_name).toBe(account2_m1.account_name);
+      expect(rule1.accountOne.account_name).toBe(account1_m1.account_name);
+      expect(rule1.accountTwo.account_name).toBe(account2_m1.account_name);
 
       const rule2 = response.body.find((r: any) => r.account_one_id === account2_m1.account_id && r.account_two_id === account3_m1.account_id);
       expect(rule2).toBeDefined();
-      // if (rule2.accountOne) expect(rule2.accountOne.account_name).toBe(account2_m1.account_name);
-      // if (rule2.accountTwo) expect(rule2.accountTwo.account_name).toBe(account3_m1.account_name);
+      expect(rule2.accountOne.account_name).toBe(account2_m1.account_name);
+      expect(rule2.accountTwo.account_name).toBe(account3_m1.account_name);
     });
   });
 
@@ -183,6 +196,10 @@ describe('Recon Rules API Endpoints', () => {
 
       expect(deleteResponse.statusCode).toBe(200);
       expect(deleteResponse.body.id).toBe(ruleId);
+      expect(deleteResponse.body).toHaveProperty('accountOne');
+      expect(deleteResponse.body.accountOne).toHaveProperty('account_name', account1_m1.account_name);
+      expect(deleteResponse.body).toHaveProperty('accountTwo');
+      expect(deleteResponse.body.accountTwo).toHaveProperty('account_name', account2_m1.account_name);
 
       const getResponse = await request(server)
         .get(`/api/merchants/${merchant1.merchant_id}/recon-rules`);

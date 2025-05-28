@@ -30,7 +30,7 @@ type ReconRuleWithAccounts = ReconRule & { // Use Domain ReconRule
 };
 
 
-async function createReconRule(data: CreateReconRuleInput): Promise<ReconRule> { // Return Domain ReconRule
+async function createReconRule(data: CreateReconRuleInput): Promise<ReconRuleWithAccounts> { // Return Domain ReconRule with accounts
   const { merchant_id, account_one_id, account_two_id } = data;
 
   if (!merchant_id || !account_one_id || !account_two_id) {
@@ -70,8 +70,24 @@ async function createReconRule(data: CreateReconRuleInput): Promise<ReconRule> {
         account_two_id,
         // description: data.description, // if description is part of CreateReconRuleInput
       },
+      include: {
+        accountOne: {
+          select: {
+            account_id: true,
+            account_name: true,
+            merchant_id: true,
+          },
+        },
+        accountTwo: {
+          select: {
+            account_id: true,
+            account_name: true,
+            merchant_id: true,
+          },
+        },
+      },
     });
-    return newRule as ReconRule; // Cast to Domain model
+    return newRule as ReconRuleWithAccounts; // Cast to Domain model with accounts
   } catch (error) {
     if (error instanceof AppError) {
       throw error;
@@ -118,7 +134,7 @@ async function listReconRules(merchant_id: string): Promise<ReconRuleWithAccount
   }
 }
 
-async function deleteReconRule(merchant_id: string, rule_id: string): Promise<ReconRule> { // Return Domain ReconRule
+async function deleteReconRule(merchant_id: string, rule_id: string): Promise<ReconRuleWithAccounts> { // Return Domain ReconRule with accounts
   try {
     // First, ensure the rule exists and belongs to the merchant
     const rule = await findUniqueOrThrow<PrismaReconRulePrisma>( // Use aliased PrismaReconRule
@@ -135,8 +151,24 @@ async function deleteReconRule(merchant_id: string, rule_id: string): Promise<Re
         id: rule_id,
         // merchant_id: merchant_id, // This is implicitly checked by the findUnique above
       },
+      include: {
+        accountOne: {
+          select: {
+            account_id: true,
+            account_name: true,
+            merchant_id: true,
+          },
+        },
+        accountTwo: {
+          select: {
+            account_id: true,
+            account_name: true,
+            merchant_id: true,
+          },
+        },
+      },
     });
-    return deletedPrismaRule as ReconRule; // Cast to Domain model
+    return deletedPrismaRule as ReconRuleWithAccounts; // Cast to Domain model with accounts
   } catch (error) {
     if (error instanceof AppError) { // This will catch NotFoundError from findUniqueOrThrow or ensureEntityBelongsToMerchant
       logger.error(error, { context: `AppError in deleteReconRule for rule ${rule_id}`}); // Log it before re-throwing

@@ -20,7 +20,107 @@ interface ReconRuleParams {
  *   description: Reconciliation Rule management
  */
 
-// ... (Swagger definitions remain the same - ensure they reference new schema names from recon_rule.types.ts) ...
+/**
+ * @swagger
+ * /merchants/{merchant_id}/recon-rules:
+ *   post:
+ *     summary: Create a new reconciliation rule
+ *     tags: [ReconRules]
+ *     parameters:
+ *       - in: path
+ *         name: merchant_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the merchant to create a rule for
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - account_one_id
+ *               - account_two_id
+ *             properties:
+ *               account_one_id:
+ *                 type: string
+ *                 format: uuid
+ *                 description: ID of the first account in the rule pair
+ *               account_two_id:
+ *                 type: string
+ *                 format: uuid
+ *                 description: ID of the second account in the rule pair
+ *     responses:
+ *       201:
+ *         description: Reconciliation rule created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ReconRuleResponse'
+ *       400:
+ *         description: Bad request (missing fields, invalid account IDs, etc.)
+ *       404:
+ *         description: Merchant or accounts not found
+ *       409:
+ *         description: Rule already exists for these accounts
+ *       500:
+ *         description: Internal server error
+ *
+ *   get:
+ *     summary: List all reconciliation rules for a merchant
+ *     tags: [ReconRules]
+ *     parameters:
+ *       - in: path
+ *         name: merchant_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the merchant to list rules for
+ *     responses:
+ *       200:
+ *         description: List of reconciliation rules
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ReconRulesListResponse'
+ *       404:
+ *         description: Merchant not found
+ *       500:
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /merchants/{merchant_id}/recon-rules/{rule_id}:
+ *   delete:
+ *     summary: Delete a reconciliation rule
+ *     tags: [ReconRules]
+ *     parameters:
+ *       - in: path
+ *         name: merchant_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the merchant the rule belongs to
+ *       - in: path
+ *         name: rule_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the rule to delete
+ *     responses:
+ *       200:
+ *         description: Rule deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ReconRuleResponse'
+ *       404:
+ *         description: Merchant or rule not found
+ *       500:
+ *         description: Internal server error
+ */
 
 const createReconRuleHandler: RequestHandler<{ merchant_id: string }, any, CreateReconRuleRequest> = async (req, res, next) => {
   try {
@@ -40,6 +140,16 @@ const createReconRuleHandler: RequestHandler<{ merchant_id: string }, any, Creat
         merchant_id: ruleData.merchant_id,
         account_one_id: ruleData.account_one_id,
         account_two_id: ruleData.account_two_id,
+        accountOne: {
+            account_id: ruleData.accountOne!.account_id,
+            account_name: ruleData.accountOne!.account_name,
+            merchant_id: ruleData.accountOne!.merchant_id,
+        },
+        accountTwo: {
+            account_id: ruleData.accountTwo!.account_id,
+            account_name: ruleData.accountTwo!.account_name,
+            merchant_id: ruleData.accountTwo!.merchant_id,
+        },
         created_at: ruleData.created_at,
         updated_at: ruleData.updated_at,
     };
@@ -71,6 +181,16 @@ const listReconRulesHandler: RequestHandler<{ merchant_id: string }> = async (re
         merchant_id: rule.merchant_id,
         account_one_id: rule.account_one_id,
         account_two_id: rule.account_two_id,
+        accountOne: {
+            account_id: rule.accountOne!.account_id,
+            account_name: rule.accountOne!.account_name,
+            merchant_id: rule.accountOne!.merchant_id,
+        },
+        accountTwo: {
+            account_id: rule.accountTwo!.account_id,
+            account_name: rule.accountTwo!.account_name,
+            merchant_id: rule.accountTwo!.merchant_id,
+        },
         created_at: rule.created_at,
         updated_at: rule.updated_at,
     }));
@@ -110,6 +230,16 @@ const deleteReconRuleHandler: RequestHandler<ReconRuleParams> = async (req, res,
         merchant_id: deletedRuleData.merchant_id,
         account_one_id: deletedRuleData.account_one_id,
         account_two_id: deletedRuleData.account_two_id,
+        accountOne: {
+            account_id: deletedRuleData.accountOne!.account_id,
+            account_name: deletedRuleData.accountOne!.account_name,
+            merchant_id: deletedRuleData.accountOne!.merchant_id,
+        },
+        accountTwo: {
+            account_id: deletedRuleData.accountTwo!.account_id,
+            account_name: deletedRuleData.accountTwo!.account_name,
+            merchant_id: deletedRuleData.accountTwo!.merchant_id,
+        },
         created_at: deletedRuleData.created_at,
         updated_at: deletedRuleData.updated_at,
     };
