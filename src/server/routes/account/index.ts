@@ -78,7 +78,9 @@ const router: Router = express.Router({ mergeParams: true }); // mergeParams all
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/AccountsListResponse'
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/AccountWithBalanceResponse'
  *       404:
  *         description: Merchant not found
  *       500:
@@ -212,8 +214,8 @@ const listAccountsHandler: RequestHandler<{ merchant_id: string }> = async (req,
   const { merchant_id } = req.params;
   try {
     const accountsData = await accountCore.listAccountsByMerchant(merchant_id);
-    // Map array of Prisma models to array of API models
-    const responseAccounts: AccountResponse[] = accountsData.map(acc => ({
+    // Map array of Prisma models to array of API models with balances
+    const responseAccounts = accountsData.map(acc => ({
         account_id: acc.account_id,
         merchant_id: acc.merchant_id,
         account_name: acc.account_name,
@@ -221,6 +223,9 @@ const listAccountsHandler: RequestHandler<{ merchant_id: string }> = async (req,
         currency: acc.currency,
         created_at: acc.created_at,
         updated_at: acc.updated_at,
+        posted_balance: acc.posted_balance,
+        pending_balance: acc.pending_balance,
+        available_balance: acc.available_balance,
     }));
     res.status(200).json(responseAccounts);
   } catch (error) {

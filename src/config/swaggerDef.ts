@@ -77,18 +77,18 @@ const options: Options = {
               properties: {
                 posted_balance: {
                   type: 'string',
-                  description: 'Placeholder for posted balance.',
-                  example: '0.00'
+                  description: 'Money that has fully settled in the account. For DEBIT_NORMAL accounts: posted debits - posted credits. For CREDIT_NORMAL accounts: posted credits - posted debits.',
+                  example: '1250.00'
                 },
                 pending_balance: {
                   type: 'string',
-                  description: 'Placeholder for pending balance.',
-                  example: '0.00'
+                  description: 'Includes money expected to settle in/out plus settled money. For DEBIT_NORMAL: pending debits - pending credits. For CREDIT_NORMAL: pending credits - pending debits.',
+                  example: '1500.00'
                 },
                 available_balance: {
                   type: 'string',
-                  description: 'Placeholder for available balance.',
-                  example: '0.00'
+                  description: 'Money available to be sent out. For DEBIT_NORMAL: posted debits - pending credits. For CREDIT_NORMAL: posted credits - pending debits.',
+                  example: '1000.00'
                 }
               }
             }

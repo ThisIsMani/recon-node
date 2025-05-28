@@ -4,6 +4,7 @@ import { Account as PrismaAccountFromPrisma, AccountType as PrismaAccountType, P
 import { Account } from '../../domain_models/account.types'; // Import Domain Model
 import { AppError, NotFoundError, ValidationError, InternalServerError } from '../../../errors/AppError';
 import { findUniqueOrThrow, ensureEntityBelongsToMerchant } from '../../../services/databaseHelpers';
+import { calculateAccountBalances, calculateMultipleAccountBalances } from './balance-calculator';
 
 // Define input data structure for creating an account, aligning with CreateAccountRequest
 export interface CreateAccountInput { // Export if used by routes directly, or keep local if routes map to it
@@ -69,7 +70,7 @@ async function createAccount(accountInput: CreateAccountInput): Promise<Account>
 }
 
 /**
- * Lists all accounts for a specific merchant, with placeholder balances.
+ * Lists all accounts for a specific merchant, with calculated balances.
  * @param {string} merchantId - The ID of the merchant.
  * @returns {Promise<Array<Account & { posted_balance: string, pending_balance: string, available_balance: string }>>} A list of accounts (Domain Models with balance).
  */
@@ -81,11 +82,22 @@ async function listAccountsByMerchant(merchantId: string): Promise<Array<Account
       },
       // Select all fields to match the full Account domain model
     });
+    
+    // Calculate balances for all accounts in parallel
+    const balanceMap = await calculateMultipleAccountBalances(
+      prismaAccounts.map(acc => ({ 
+        account_id: acc.account_id, 
+        account_type: acc.account_type 
+      }))
+    );
+    
     return prismaAccounts.map(acc => ({ 
         ...(acc as Account), // Cast to Domain model
-        posted_balance: '0.00', 
-        pending_balance: '0.00', 
-        available_balance: '0.00' 
+        ...(balanceMap.get(acc.account_id) || { 
+          posted_balance: '0.00', 
+          pending_balance: '0.00', 
+          available_balance: '0.00' 
+        })
     }));
   } catch (error) {
     if (error instanceof AppError) {
@@ -183,9 +195,45 @@ async function updateAccountName(merchantId: string, accountId: string, newAccou
   }
 }
 
+/**
+ * Gets a specific account for a merchant, with calculated balances.
+ * @param {string} merchantId - The ID of the merchant.
+ * @param {string} accountId - The ID of the account to retrieve.
+ * @returns {Promise<Account & { posted_balance: string, pending_balance: string, available_balance: string }>} The account (Domain Model with balance).
+ */
+async function getAccountByIdWithBalances(merchantId: string, accountId: string): Promise<Account & { posted_balance: string, pending_balance: string, available_balance: string }> {
+  try {
+    const account = await findUniqueOrThrow<PrismaAccountFromPrisma>(
+      Prisma.ModelName.Account,
+      { where: { account_id: accountId } },
+      'Account',
+      accountId
+    );
+
+    ensureEntityBelongsToMerchant(account, merchantId, 'Account', accountId);
+
+    // Calculate balances for the account
+    const balances = await calculateAccountBalances(account.account_id, account.account_type);
+    
+    return {
+      ...(account as Account), // Cast to Domain model
+      ...balances
+    };
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    if (process.env.NODE_ENV !== 'test') {
+      logger.error(error as Error, { context: 'Error getting account with balances' });
+    }
+    throw new InternalServerError('Could not retrieve account due to an internal error.');
+  }
+}
+
 export {
   createAccount,
   listAccountsByMerchant,
+  getAccountByIdWithBalances,
   deleteAccount,
   updateAccountName,
 };
