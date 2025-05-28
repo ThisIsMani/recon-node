@@ -257,7 +257,10 @@ const options: Options = {
       }
     }
   },
-  apis: ['./src/server/routes/**/*.ts'], // Updated to target .ts files
+  apis: [
+    './src/server/routes/**/*.ts',
+    './src/server/api_models/**/*.ts'
+  ], // Include both routes and API models
 };
 
 const swaggerSpec = swaggerJsdoc(options);

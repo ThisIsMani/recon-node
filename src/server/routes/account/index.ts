@@ -14,7 +14,150 @@ const router: Router = express.Router({ mergeParams: true }); // mergeParams all
  *   description: Account management for a specific merchant
  */
 
-// ... (Swagger definitions remain the same, but should reference new schema names from account.types.ts if not already) ...
+/**
+ * @swagger
+ * /merchants/{merchant_id}/accounts:
+ *   post:
+ *     summary: Create a new account for a merchant
+ *     tags: [Accounts]
+ *     parameters:
+ *       - in: path
+ *         name: merchant_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the merchant to create an account for
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - account_name
+ *               - account_type
+ *               - currency
+ *             properties:
+ *               account_name:
+ *                 type: string
+ *                 description: Name of the account
+ *                 example: Main Operating Account
+ *               account_type:
+ *                 $ref: '#/components/schemas/AccountTypeEnum'
+ *               currency:
+ *                 type: string
+ *                 description: 3-letter currency code
+ *                 example: USD
+ *     responses:
+ *       201:
+ *         description: Account created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AccountResponse'
+ *       400:
+ *         description: Bad request (missing or invalid fields)
+ *       404:
+ *         description: Merchant not found
+ *       500:
+ *         description: Internal server error
+ *
+ *   get:
+ *     summary: List all accounts for a merchant
+ *     tags: [Accounts]
+ *     parameters:
+ *       - in: path
+ *         name: merchant_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the merchant to list accounts for
+ *     responses:
+ *       200:
+ *         description: List of accounts for the merchant
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AccountsListResponse'
+ *       404:
+ *         description: Merchant not found
+ *       500:
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /merchants/{merchant_id}/accounts/{account_id}:
+ *   put:
+ *     summary: Update an account's name
+ *     tags: [Accounts]
+ *     parameters:
+ *       - in: path
+ *         name: merchant_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the merchant the account belongs to
+ *       - in: path
+ *         name: account_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the account to update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - account_name
+ *             properties:
+ *               account_name:
+ *                 type: string
+ *                 description: New name for the account
+ *     responses:
+ *       200:
+ *         description: Account updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AccountResponse'
+ *       400:
+ *         description: Bad request (missing or invalid fields)
+ *       404:
+ *         description: Merchant or account not found
+ *       500:
+ *         description: Internal server error
+ *
+ *   delete:
+ *     summary: Delete an account
+ *     tags: [Accounts]
+ *     parameters:
+ *       - in: path
+ *         name: merchant_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the merchant the account belongs to
+ *       - in: path
+ *         name: account_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the account to delete
+ *     responses:
+ *       200:
+ *         description: Account deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AccountResponse'
+ *       404:
+ *         description: Merchant or account not found
+ *       500:
+ *         description: Internal server error
+ */
 
 const createAccountHandler: RequestHandler<{ merchant_id: string }, any, CreateAccountRequest> = async (req, res, next) => {
   const { merchant_id } = req.params; // merchant_id from path is already in CreateAccountRequest

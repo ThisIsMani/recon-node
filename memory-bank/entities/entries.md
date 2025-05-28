@@ -42,7 +42,29 @@ model Entry {
 
 **API Endpoints:**
 - `GET /api/accounts/:account_id/entries`: List entries for the specified account. Supports filtering by `status` (e.g., `EXPECTED`, `POSTED`, `ARCHIVED`) via query parameters.
-  - **Response Update:** The API response now includes details of the associated `transaction` for each entry, including `transaction.status`, `transaction.transaction_id`, `transaction.logical_transaction_id`, and `transaction.version`.
+  - **Response Structure:** The API response includes detailed transaction information for each entry in a dedicated `transaction_info` field with the following properties:
+    ```json
+    {
+      "entry_id": "entry_12345",
+      "account_id": "account_67890",
+      "transaction_id": "transaction_abcde",
+      "entry_type": "DEBIT",
+      "amount": 100.00,
+      "currency": "USD",
+      "status": "POSTED",
+      "effective_date": "2025-05-26T14:30:00.000Z",
+      "metadata": { "order_id": "order-xyz" },
+      "transaction_info": {
+        "transaction_id": "transaction_abcde",
+        "logical_transaction_id": "ltid_order-xyz",
+        "status": "POSTED",
+        "version": 1
+      },
+      "discarded_at": null,
+      "created_at": "2025-05-26T14:30:00.000Z",
+      "updated_at": "2025-05-26T14:30:00.000Z"
+    }
+    ```
   - **Note:** There is no `POST` endpoint for creating entries directly via the API. Entries are created through internal system processes and *must* be associated with a transaction.
 
 **Core Logic (`src/server/core/entry/index.js`):**

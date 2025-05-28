@@ -33,3 +33,6 @@ Thumbs.db
 /dist
 *.tsbuildinfo
 .aider*
+
+# Claude Code
+.claude/

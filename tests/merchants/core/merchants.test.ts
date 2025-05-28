@@ -20,10 +20,11 @@ describe('Merchant Core Logic', () => {
 
   describe('createMerchant', () => {
     it('should create a new merchant successfully', async () => {
-      const merchantData = { merchant_id: 'merchant123', merchant_name: 'Test Merchant' };
+      const merchantData = { merchant_name: 'Test Merchant' };
+      const generatedId = 'merchant_generated_123';
       const mockDate = new Date();
       (prisma.merchantAccount.create as jest.Mock).mockResolvedValueOnce({
-        merchant_id: merchantData.merchant_id,
+        merchant_id: generatedId, // The implementation should generate this
         merchant_name: merchantData.merchant_name,
         created_at: mockDate,
         updated_at: mockDate,
@@ -32,25 +33,17 @@ describe('Merchant Core Logic', () => {
       const newMerchant: Merchant = await createMerchant(merchantData);
 
       expect(newMerchant).toBeDefined();
-      expect(newMerchant.merchant_id).toBe(merchantData.merchant_id);
+      expect(newMerchant.merchant_id).toBe(generatedId); // Check generated ID
       expect(newMerchant.merchant_name).toBe(merchantData.merchant_name);
       expect(newMerchant.created_at).toEqual(mockDate);
       expect(newMerchant.updated_at).toEqual(mockDate);
     });
 
-    it('should throw an error if merchant ID already exists', async () => {
-      const merchantData = { merchant_id: 'merchant123', merchant_name: 'Test Merchant' };
+    it('should handle ID generation and possible collisions', async () => {
+      const merchantData = { merchant_name: 'Test Merchant' };
       const mockDate = new Date();
-      // Mock first successful creation
-      (prisma.merchantAccount.create as jest.Mock).mockResolvedValueOnce({
-        merchant_id: merchantData.merchant_id,
-        merchant_name: merchantData.merchant_name,
-        created_at: mockDate, 
-        updated_at: mockDate 
-      } as PrismaMerchantAccount);
-      await createMerchant(merchantData); 
-
-      // Mock Prisma's create to throw P2002 error for the second attempt
+      
+      // Mock Prisma's create to throw P2002 error on a collision
       (prisma.merchantAccount.create as jest.Mock).mockRejectedValueOnce({
         code: 'P2002',
         meta: { target: ['merchant_id'] },
@@ -61,13 +54,13 @@ describe('Merchant Core Logic', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(Error); 
         if (error instanceof Error) { 
-            expect(error.message).toBe(`Merchant with ID '${merchantData.merchant_id}' already exists.`);
+            expect(error.message).toBe(`Error creating merchant with unique ID. Please try again.`);
         }
       }
     });
 
     it('should throw a generic error for other database issues during creation', async () => {
-      const merchantData = { merchant_id: 'merchant-fail', merchant_name: 'Fail Merchant' };
+      const merchantData = { merchant_name: 'Fail Merchant' };
       (prisma.merchantAccount.create as jest.Mock).mockRejectedValueOnce(new Error('Some other DB error'));
 
       try {

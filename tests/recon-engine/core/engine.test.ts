@@ -349,12 +349,13 @@ describe('Recon Engine Core Logic - processStagingEntryWithRecon', () => {
           status: TransactionStatus.EXPECTED,
           logical_transaction_id: mockStagingEntry.staging_entry_id,
           version: 1,
-          metadata: { 
+          metadata: expect.objectContaining({ 
             payment_ref: 'pay-abc', 
-            order_id: undefined,
             source_staging_entry_id: mockStagingEntry.staging_entry_id, 
             processing_mode: StagingEntryProcessingMode.TRANSACTION,
-          }
+            account_scoped: true,
+            original_order_id: null
+          })
       }));
 
       expect(receivedActualEntry).toEqual(expect.objectContaining({

@@ -1,5 +1,82 @@
 # Progress Log: Smart Ledger Backend (Node.js)
 
+**2025-05-26: Enhanced Entry List API with Transaction Data**
+- **Task:** Add transaction information to entries list response
+- **Actions:**
+    - Added a new `TransactionInfo` interface in the API models
+    - Modified `EntryResponse` to include the `transaction_info` field
+    - Updated the entry route handler to map transaction data to the response
+    - Updated Swagger documentation to describe the new response structure
+    - Added tests to verify the transaction_info field in responses
+    - Updated memory-bank documentation to reflect the changes
+- **Status:** Completed. Entry list API now includes transaction details.
+- **Key Learnings/Issues:**
+    - Enhanced API provides more context about entries without requiring additional requests
+    - Transaction status, logical ID, and version information helps with transaction tracking
+    - Nesting related entity data in a dedicated field keeps the response structure clean and intuitive
+- **Next Steps:** 
+    - Consider adding similar enhancements to other list endpoints where related entity data would be valuable
+
+**2025-05-26: Account-Scoped Order_ID Implementation**
+- **Task:** Fix issue with entries being marked as NEEDS_MANUAL_REVIEW when same order_id is used across different accounts
+- **Actions:**
+    - Modified recon engine to scope order_id uniqueness to account level
+    - Updated transaction creation logic in TRANSACTION mode:
+      - Created account-scoped logical transaction IDs by combining account_id with order_id
+      - Added original_order_id and account_scoped flag to transaction metadata
+    - Added explicit comment in matching logic to emphasize account_id scope for lookups
+    - Updated memory-bank documentation to reflect the account-scoped order_id design
+- **Status:** Completed. Changes allow same order_id to be used across different accounts without conflicts.
+- **Key Learnings/Issues:**
+    - Order IDs should be treated as unique only within a specific account, not globally
+    - This allows different accounts (even within the same merchant) to use the same order_id independently
+    - Prefixing logical transaction IDs with account_id ensures proper isolation
+- **Next Steps:** 
+    - Monitor system for any other areas where order_id uniqueness assumptions might need to be addressed
+
+**2025-05-26: Merchant Creation API Enhancement**
+- **Task:** Remove merchant_id from merchant creation request, implementing auto-generation.
+- **Actions:**
+    - Updated `src/server/api_models/merchant.types.ts` to remove merchant_id from request DTO
+    - Modified `src/server/routes/merchant/index.ts` to only extract merchant_name from request body
+    - Updated validation logic to only check for merchant_name presence and type
+    - Enhanced `src/server/core/merchant/index.ts` to auto-generate a unique merchant_id based on timestamp and random number
+    - Updated merchant tests to work with the new auto-generated IDs
+    - Updated memory-bank documentation to reflect changes to the merchant creation flow
+- **Status:** Completed. All tests pass.
+- **Key Learnings/Issues:**
+    - Auto-generated IDs improve the API's usability by reducing client responsibility
+    - Required adjusting test fixtures and expectations to handle non-deterministic IDs
+    - Generated IDs are sufficiently unique for this application's needs using the timestamp+random approach
+- **Next Steps:** Consider further API improvements based on usage patterns
+
+**2025-05-23: Error Handling Standardization**
+- **Task:** Implement a standardized error handling system throughout the application.
+- **Actions:**
+    - Analyzed existing error handling approaches in the project
+    - Created a comprehensive error hierarchy with domain-specific categories:
+      - Enhanced `AppError` base class with cause chaining and details method
+      - Created `DatabaseError`, `BusinessLogicError`, `ExternalServiceError`, and `SystemError` base categories
+      - Implemented specific error types for the transaction module
+    - Updated global error handler in `app.ts`:
+      - Added request context support
+      - Improved error logging with contextual information
+      - Standardized error response format
+    - Fixed module-specific errors in transaction module:
+      - Replaced generic errors with typed errors
+      - Added detailed context to error objects
+    - Created documentation for the error system with usage examples
+    - Added TypeScript declarations for request context
+- **Status:** Completed. All tests pass with the new error system.
+- **Key Learnings/Issues:**
+    - Request ID context needed type declarations for Express
+    - Error chaining enhances debugging capabilities significantly
+    - Consistent error handling improves API responses and debugging
+    - Using named error types makes error handling code more readable
+- **Next Steps:** 
+    - Gradually replace remaining generic errors in other modules
+    - Consider adding documentation in OpenAPI spec for error responses
+
 **2025-05-23: Test Coverage Improvements**
 - **Task:** Improve code coverage for critical components with low test coverage.
 - **Actions:**

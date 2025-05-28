@@ -7,7 +7,6 @@ import { AppError, NotFoundError, ValidationError, InternalServerError } from '.
 
 // This local interface can be replaced by the imported Merchant domain type or a specific Input DTO type
 interface CreateMerchantInput { // Renamed for clarity, could also use a dedicated DTO from domain_models
-    merchant_id: string;
     merchant_name: string;
 }
 
@@ -27,9 +26,12 @@ interface PrismaError extends Error {
  */
 const createMerchant = async (merchantInput: CreateMerchantInput): Promise<Merchant> => {
     try {
+        // Generate a unique ID for the merchant
+        const merchantId = `merchant_${Date.now()}_${Math.floor(Math.random() * 1000)}`;  
+
         const newPrismaMerchant = await prisma.merchantAccount.create({
             data: {
-                merchant_id: merchantInput.merchant_id,
+                merchant_id: merchantId,
                 merchant_name: merchantInput.merchant_name,
             },
         });
@@ -42,7 +44,7 @@ const createMerchant = async (merchantInput: CreateMerchantInput): Promise<Merch
         }
         const prismaError = error as PrismaError;
         if (prismaError.code === 'P2002' && prismaError.meta?.target?.includes('merchant_id')) {
-            throw new ValidationError(`Merchant with ID '${merchantInput.merchant_id}' already exists.`);
+            throw new ValidationError(`Error creating merchant with unique ID. Please try again.`);
         }
         logger.error(error as Error, { context: 'Error creating merchant' });
         throw new InternalServerError('Could not create merchant account.'); // Generic error for client

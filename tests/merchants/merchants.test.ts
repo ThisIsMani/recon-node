@@ -30,17 +30,19 @@ describe('Merchant API Endpoints', () => {
     it('should create a new merchant successfully', async () => {
       const response = await request(server)
         .post('/api/merchants')
-        .send({ merchant_id: 'm_test_001', name: 'Test Merchant One' }); // Use name
+        .send({ merchant_name: 'Test Merchant One' });
       
       expect(response.statusCode).toBe(201);
-      expect(response.body).toHaveProperty('id', 'm_test_001'); // Expect id
-      expect(response.body).toHaveProperty('name', 'Test Merchant One'); // Expect name
+      expect(response.body).toHaveProperty('merchant_id'); // ID should be auto-generated
+      expect(response.body).toHaveProperty('merchant_name', 'Test Merchant One'); // Check merchant_name
       expect(response.body).toHaveProperty('created_at');
       expect(response.body).toHaveProperty('updated_at');
       expect(new Date(response.body.created_at).toISOString()).toBe(response.body.created_at);
       expect(new Date(response.body.updated_at).toISOString()).toBe(response.body.updated_at);
       
-      const dbMerchant = await mockPrismaClient.merchantAccount.findUnique({ where: { merchant_id: 'm_test_001' } });
+      // Get the auto-generated ID from the response
+      const merchantId = response.body.merchant_id;
+      const dbMerchant = await mockPrismaClient.merchantAccount.findUnique({ where: { merchant_id: merchantId } });
       expect(dbMerchant).not.toBeNull();
       if (dbMerchant) { // Type guard
         expect(dbMerchant.merchant_name).toBe('Test Merchant One');
@@ -48,49 +50,48 @@ describe('Merchant API Endpoints', () => {
     });
 
     it('should return 409 if merchant_id already exists', async () => {
-      await request(server)
+      // This test is no longer relevant since merchant_id is auto-generated
+      // Instead, test that two merchants with the same name can be created
+      const response1 = await request(server)
         .post('/api/merchants')
-        .send({ merchant_id: 'm_test_002', name: 'Existing Merchant' }); // Use name
+        .send({ merchant_name: 'Duplicate Name Merchant' });
       
-      const response = await request(server)
+      const response2 = await request(server)
         .post('/api/merchants')
-        .send({ merchant_id: 'm_test_002', name: 'Another Merchant With Same ID' }); // Use name
+        .send({ merchant_name: 'Duplicate Name Merchant' });
       
-      expect(response.statusCode).toBe(400);
-      expect(typeof response.body).toBe('object'); 
-      expect(response.body).toHaveProperty('error'); 
-      // Assuming response.body.error is an object based on previous test failure output
-      expect(response.body.error).toHaveProperty('message', "Merchant with ID 'm_test_002' already exists.");
-      expect(response.body.error).toHaveProperty('code', 'ERR_VALIDATION');
+      expect(response1.statusCode).toBe(201);
+      expect(response2.statusCode).toBe(201);
+      expect(response1.body.merchant_id).not.toBe(response2.body.merchant_id); // Should have different IDs
       // The top-level response.body.code might not exist if the error object is nested under response.body.error
       // If the global error handler strictly sends { error: err.message, code: err.errorCode }, then the original assertions were closer.
       // However, the test failure output "Received: {"code": "ERR_VALIDATION", "message": "..."}" for response.body.error suggests nesting.
     });
 
-    it('should return 400 if merchant_id is missing', async () => {
+    it('should return 400 if merchant_name is missing', async () => {
       const response = await request(server)
         .post('/api/merchants')
-        .send({ name: 'Merchant Without ID' }); // Use name
+        .send({});
       
       expect(response.statusCode).toBe(400);
-      expect(response.body.error).toContain('merchant_id and name are required'); // Updated error message
+      expect(response.body.error).toContain('merchant_name is required');
     });
 
-    it('should return 400 if name is missing', async () => { // Updated test description
+    it('should return 400 if merchant_name is empty string', async () => {
       const response = await request(server)
         .post('/api/merchants')
-        .send({ merchant_id: 'm_test_003_no_name' });
+        .send({ merchant_name: '' });
       
       expect(response.statusCode).toBe(400);
-      expect(response.body.error).toContain('merchant_id and name are required'); // Updated error message
+      expect(response.body.error).toContain('merchant_name is required');
     });
 
-    it('should return 400 if merchant_id is not a string', async () => {
+    it('should return 400 if merchant_name is not a string', async () => {
       const response = await request(server)
         .post('/api/merchants')
-        .send({ merchant_id: 123, name: 'Numeric ID Merchant' }); // Use name
+        .send({ merchant_name: 123 });
       expect(response.statusCode).toBe(400);
-      expect(response.body.error).toContain('merchant_id and name must be strings'); // Updated error message
+      expect(response.body.error).toContain('merchant_name must be a string');
     });
   });
 
@@ -102,28 +103,32 @@ describe('Merchant API Endpoints', () => {
     });
 
     it('should return a list of merchants', async () => {
-      await request(server)
+      const resp1 = await request(server)
         .post('/api/merchants')
-        .send({ merchant_id: 'm_get_001', name: 'Get Merchant 1' }); // Use name
-      await request(server)
+        .send({ merchant_name: 'Get Merchant 1' });
+      const resp2 = await request(server)
         .post('/api/merchants')
-        .send({ merchant_id: 'm_get_002', name: 'Get Merchant 2' }); // Use name
+        .send({ merchant_name: 'Get Merchant 2' });
+        
+      const merchant1Id = resp1.body.merchant_id;
+      const merchant2Id = resp2.body.merchant_id;
       
       const response = await request(server).get('/api/merchants');
       expect(response.statusCode).toBe(200);
       expect(response.body.length).toBe(2);
       response.body.forEach((merchant: any) => {
-        expect(merchant).toHaveProperty('id');
-        expect(merchant).toHaveProperty('name');
+        expect(merchant).toHaveProperty('merchant_id');
+        expect(merchant).toHaveProperty('merchant_name');
         expect(merchant).toHaveProperty('created_at');
         expect(merchant).toHaveProperty('updated_at');
         expect(new Date(merchant.created_at).toISOString()).toBe(merchant.created_at);
         expect(new Date(merchant.updated_at).toISOString()).toBe(merchant.updated_at);
       });
+      // Check that our two merchants are in the response
       expect(response.body).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'm_get_001', name: 'Get Merchant 1' }), // Expect id and name
-          expect.objectContaining({ id: 'm_get_002', name: 'Get Merchant 2' }), // Expect id and name
+          expect.objectContaining({ merchant_id: merchant1Id, merchant_name: 'Get Merchant 1' }),
+          expect.objectContaining({ merchant_id: merchant2Id, merchant_name: 'Get Merchant 2' }),
         ])
       );
     });

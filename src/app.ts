@@ -33,7 +33,8 @@ app.get('/', (req: Request, res: Response) => {
 // Centralized error handling middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     // Get request ID from context if available
-    const requestId = req.context?.requestId || 'unknown';
+    // Using type assertion to work around TypeScript limitations with Express augmentation
+    const requestId = ((req as any).context?.requestId) || 'unknown';
     
     // Enhanced logging with request context
     logger.error('Request error', {

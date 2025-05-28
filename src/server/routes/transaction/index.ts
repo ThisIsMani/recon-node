@@ -25,7 +25,50 @@ interface TransactionQuery {
  *   name: Transactions
  *   description: Financial transaction management (currently, only listing is supported).
  */
-// ... (Swagger definitions remain the same) ...
+
+/**
+ * @swagger
+ * /merchants/{merchant_id}/transactions:
+ *   get:
+ *     summary: List all transactions for a merchant
+ *     tags: [Transactions]
+ *     parameters:
+ *       - in: path
+ *         name: merchant_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the merchant to list transactions for
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         schema:
+ *           $ref: '#/components/schemas/TransactionStatusEnum'
+ *         description: Filter transactions by status
+ *       - in: query
+ *         name: logical_transaction_id
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Filter transactions by logical transaction ID
+ *       - in: query
+ *         name: version
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Filter transactions by version
+ *     responses:
+ *       200:
+ *         description: List of transactions for the merchant
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TransactionsListResponse'
+ *       404:
+ *         description: Merchant not found
+ *       500:
+ *         description: Internal server error
+ */
 
 const listTransactionsHandler: RequestHandler<TransactionRouteParams, any, any, TransactionQuery> = async (req, res) => {
   const { merchant_id } = req.params; 

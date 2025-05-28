@@ -8,18 +8,19 @@ import { requestContextStorage } from '../../services/logger'; // Adjust path as
  * the asynchronous operations of a single request.
  */
 export const requestContextMiddleware = (req: Request, res: Response, next: NextFunction): void => {
-  let incomingRequestId = req.headers['x-request-id'];
-  if (Array.isArray(incomingRequestId)) {
-    incomingRequestId = incomingRequestId[0];
-  }
-  const requestId = incomingRequestId || uuidv4();
+    let incomingRequestId = req.headers['x-request-id'];
+    if (Array.isArray(incomingRequestId)) {
+        incomingRequestId = incomingRequestId[0];
+    }
+    const requestId = incomingRequestId || uuidv4();
 
-  // Attach to request object for direct access in middleware and controllers
-  req.context = { requestId };
+    // Attach to request object for direct access in middleware and controllers
+    // Using type assertion to work around TypeScript limitations with Express augmentation
+    (req as any).context = { requestId };
 
-  requestContextStorage.run({ requestId }, () => {
-    // Set X-Request-ID header for client response
-    res.setHeader('X-Request-ID', requestId);
-    next();
-  });
+    requestContextStorage.run({ requestId }, () => {
+        // Set X-Request-ID header for client response
+        res.setHeader('X-Request-ID', requestId);
+        next();
+    });
 };

@@ -137,6 +137,8 @@ async function processStagingEntryWithRecon(stagingEntryFull: StagingEntryWithIn
       let originalTransaction: (PrismaTransaction & { entries: PrismaEntry[] }) | null = null;
 
       if (attemptMatchLogic) {
+        // When searching for matches, always include account_id in the query
+        // to ensure we only match within the same account
         const potentialMatches = await prisma.entry.findMany({
           where: {
             account_id: stagingEntry.account_id,
@@ -251,12 +253,26 @@ async function processStagingEntryWithRecon(stagingEntryFull: StagingEntryWithIn
       logger.info(`[ReconEngine] Processing StagingEntry ${stagingEntry.staging_entry_id} in TRANSACTION mode.`);
       const [actualEntryData, expectedEntryData] = await generateTransactionEntriesFromStaging(stagingEntry, merchantId);
       
+      // Create account-scoped logical transaction ID by combining order_id with account_id
+      // This ensures order_ids are only unique within an account, not globally
+      const orderId = (stagingEntry.metadata as Prisma.JsonObject)?.order_id as string || null;
+      const accountScopedLogicalTxId = orderId ? 
+        `${stagingEntry.account_id}_${orderId}` : 
+        stagingEntry.staging_entry_id;
+        
       const transactionShellData = {
         merchant_id: merchantId,
         status: TransactionStatus.EXPECTED,
-        logical_transaction_id: (stagingEntry.metadata as Prisma.JsonObject)?.order_id as string || stagingEntry.staging_entry_id,
+        logical_transaction_id: accountScopedLogicalTxId,
         version: 1,
-        metadata: { ...(stagingEntry.metadata as Prisma.JsonObject || {}), source_staging_entry_id: stagingEntry.staging_entry_id, processing_mode: StagingEntryProcessingMode.TRANSACTION },
+        metadata: { 
+          ...(stagingEntry.metadata as Prisma.JsonObject || {}), 
+          source_staging_entry_id: stagingEntry.staging_entry_id, 
+          processing_mode: StagingEntryProcessingMode.TRANSACTION,
+          // Store the original order_id and account_id separately for reference
+          original_order_id: orderId,
+          account_scoped: true
+        },
       };
       // This check is a bit redundant now as metadata.processing_mode is part of the shell data above.
       // if (transactionShellData.metadata.processing_mode && (stagingEntry.metadata as Prisma.JsonObject)?.processing_mode && transactionShellData.metadata.processing_mode !== (stagingEntry.metadata as Prisma.JsonObject).processing_mode) {

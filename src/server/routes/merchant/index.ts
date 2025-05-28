@@ -70,31 +70,28 @@ const router: Router = express.Router();
 const createMerchantHandler: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
     try {
         // Use the new API model for request body typing
-        const { merchant_id, name } = req.body as CreateMerchantRequest;
+        const { merchant_name } = req.body as CreateMerchantRequest;
 
         // Basic validation (more robust validation can be added, e.g., with Zod/Joi)
-        if (!merchant_id || !name) {
+        if (!merchant_name) {
             // Consider using AppError for consistency if error handling is standardized
-            res.status(400).json({ error: 'merchant_id and name are required.' });
+            res.status(400).json({ error: 'merchant_name is required.' });
             return;
         }
-        if (typeof merchant_id !== 'string' || typeof name !== 'string') {
-            res.status(400).json({ error: 'merchant_id and name must be strings.' });
+        if (typeof merchant_name !== 'string') {
+            res.status(400).json({ error: 'merchant_name must be a string.' });
             return;
         }
-        // The core `createMerchant` function might need to be updated to accept `name` instead of `merchant_name`
-        // or we map it here. For now, assuming core function expects `merchant_id` and `merchant_name`.
-        // This highlights where transformation/mapping logic will be needed.
-        const newMerchantData = await createMerchant({ merchant_id, merchant_name: name });
+        const newMerchantData = await createMerchant({ merchant_name });
 
         // Manually map Prisma model to API model
         const responseMerchant: MerchantResponse = {
-            id: newMerchantData.merchant_id, // Map merchant_id to id
-            name: newMerchantData.merchant_name, // Map merchant_name to name
+            merchant_id: newMerchantData.merchant_id, // Keep merchant_id as merchant_id
+            merchant_name: newMerchantData.merchant_name,
             created_at: newMerchantData.created_at,
             updated_at: newMerchantData.updated_at,
         };
-        res.status(201).location(`/api/merchants/${responseMerchant.id}`).json(responseMerchant);
+        res.status(201).location(`/api/merchants/${responseMerchant.merchant_id}`).json(responseMerchant);
     } catch (error) {
         next(error);
     }
@@ -123,8 +120,8 @@ const listMerchantsHandler: RequestHandler = async (req: Request, res: Response,
         const merchantDataList = await listMerchants();
         // Manually map array of Prisma models to array of API models
         const responseMerchants: MerchantResponse[] = merchantDataList.map(merchantData => ({
-            id: merchantData.merchant_id,
-            name: merchantData.merchant_name,
+            merchant_id: merchantData.merchant_id,
+            merchant_name: merchantData.merchant_name,
             created_at: merchantData.created_at,
             updated_at: merchantData.updated_at,
         }));

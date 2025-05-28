@@ -49,7 +49,8 @@ The Recon Engine is the core component responsible for processing `StagingEntry`
         -   **`TRANSACTION` Mode:**
             -   Logs processing start.
             -   Calls `generateTransactionEntriesFromStaging` to get data for the actual (POSTED) and expected entries.
-            -   Constructs `transactionShellData` for a new transaction (status `EXPECTED`, `version: 1`). Metadata includes a spread of `stagingEntry.metadata`, `source_staging_entry_id`, and `processing_mode`.
+            -   Creates account-scoped logical transaction ID by combining `account_id` with `order_id` to ensure uniqueness per account.
+            -   Constructs `transactionShellData` for a new transaction (status `EXPECTED`, `version: 1`). Metadata includes a spread of `stagingEntry.metadata`, `source_staging_entry_id`, `processing_mode`, `original_order_id` and `account_scoped: true`.
             -   Calls `transactionCore.createTransactionInternal` to atomically create the new transaction and its two entries.
             -   Updates `StagingEntry` to `PROCESSED`, sets `discarded_at`, and records `created_transaction_id` in metadata.
             -   Returns the new transaction.
@@ -135,6 +136,8 @@ Areas that still need coverage improvement:
 - `recon-engine-runner.ts`: Currently at 0% coverage
 
 ## Key Concepts
+
+-   **Account-Scoped Order IDs:** Order IDs are only unique within a specific account, not globally. This allows the same order_id to be used across different accounts (even within the same merchant) without conflicts.
 
 -   **Rule Selection Logic:**
     -   In **`TRANSACTION` mode** (typically when `generateTransactionEntriesFromStaging` is used to create new expectations): The engine looks for a `ReconRule` where the `stagingEntry.account_id` is `account_one_id` (the source/initiating account). The `EXPECTED` entry is then created for `account_two_id`.

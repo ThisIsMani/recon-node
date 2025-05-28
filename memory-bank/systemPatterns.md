@@ -43,17 +43,29 @@
 - **Centralized Routing:** A main router (`src/server/routes/index.ts`) aggregates feature-specific routers.
 - **Logging:** (Refer to `memory-bank/techContext.md` for detailed logging setup with Winston, Request IDs, and Prisma integration).
 - **Error Handling:**
-    - **Custom Error Hierarchy:** A base `AppError` class (`src/errors/AppError.ts`) is used for standardized application errors. Specific error classes (e.g., `NotFoundError`, `ValidationError`, `InternalServerError`, `BalanceError`, `NoReconRuleFoundError`) extend `AppError`.
+    - **Comprehensive Error Hierarchy:** A base `AppError` class (`src/errors/AppError.ts`) with several domain-specific error categories:
+        - `DatabaseError`: For database-related errors (connection, query, transaction, entity not found)
+        - `BusinessLogicError`: For business rule violations (duplicates, state errors, balance errors)
+        - `ExternalServiceError`: For integration issues (service unavailable, timeout, response errors)
+        - `SystemError`: For application-level issues (configuration, file system, unexpected errors)
+        - Each module also has specific error classes (e.g., `TransactionNotFoundError`, `BalanceError`) that extend these domain categories
     - Each `AppError` instance includes:
-        - `message`: Human-readable error message.
-        - `statusCode`: HTTP status code for the response.
-        - `errorCode`: A unique application-specific error code string (e.g., `ERR_NOT_FOUND`).
-        - `isOperational`: Boolean indicating if the error is operational (vs. a programmer bug).
-        - `details` (optional): Additional structured information about the error.
-    - **Global Error Handler:** Centralized error handling middleware in `src/app.ts` catches errors.
-        - If the error is an `instanceof AppError`, it uses `statusCode`, `errorCode`, `message`, and `details` to formulate a structured JSON response.
-        - For other errors, it responds with a generic 500 error and `ERR_UNHANDLED` code.
-    - **Core Logic:** Core service modules are refactored to throw instances of `AppError` subclasses for known error conditions (e.g., validation failures, resource not found).
+        - `message`: Human-readable error message
+        - `statusCode`: HTTP status code for the response
+        - `errorCode`: A unique application-specific error code string following the pattern `ERR_MODULE_TYPE`
+        - `isOperational`: Boolean indicating if the error is operational (vs. a programmer bug)
+        - `details`: Additional structured information about the error
+        - `cause`: Optional underlying error that caused this error (supports error chaining)
+    - **Error Utilities:**
+        - `withDetails()` method to add context without creating new errors
+        - Error cause chaining to preserve the original error stack trace
+        - Centralized imports through `src/errors/index.ts`
+    - **Global Error Handler:** Enhanced error handling middleware in `src/app.ts`:
+        - Captures request context (requestId) for traceability
+        - Logs errors with contextual information (URL, method, cause)
+        - Returns standardized error responses with code, message, and details
+        - Environment-specific behavior (includes stack traces in development)
+    - **Core Logic:** Core service modules throw specific error types for different error conditions, providing detailed context in the `details` property.
 - **API Documentation:** Swagger UI served at `/api-docs`, generated from JSDoc comments in route files using `swagger-jsdoc` and `swagger-ui-express`.
 - **Producer-Consumer Pattern (Recon Engine):**
     - **Process Tracker (`src/server/core/process-tracker`):** A database-backed queue (`ProcessTracker` model) manages tasks for asynchronous processing. Core functions include `createTask`, `getNextPendingTask`, `updateTaskStatus`.

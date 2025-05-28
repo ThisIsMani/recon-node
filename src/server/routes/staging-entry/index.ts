@@ -38,7 +38,177 @@ interface StagingEntryQuery {
  *   name: StagingEntries
  *   description: Staging Entry management for pre-processing financial movements
  */
-// ... (Swagger definitions remain the same - ensure they reference new schema names from staging_entry.types.ts) ...
+
+/**
+ * @swagger
+ * /accounts/{account_id}/staging-entries:
+ *   post:
+ *     summary: Create a new staging entry
+ *     tags: [StagingEntries]
+ *     parameters:
+ *       - in: path
+ *         name: account_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the account to create a staging entry for
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - entry_type
+ *               - amount
+ *               - currency
+ *               - effective_date
+ *               - processing_mode
+ *             properties:
+ *               entry_type:
+ *                 $ref: '#/components/schemas/EntryTypeEnum'
+ *               amount:
+ *                 type: number
+ *                 format: decimal
+ *                 description: Amount of the staging entry
+ *               currency:
+ *                 type: string
+ *                 description: 3-letter currency code
+ *                 example: USD
+ *               effective_date:
+ *                 type: string
+ *                 format: date-time
+ *                 description: When the entry is effective
+ *               processing_mode:
+ *                 $ref: '#/components/schemas/StagingEntryProcessingModeEnum'
+ *               metadata:
+ *                 type: object
+ *                 nullable: true
+ *                 description: Additional data for the entry
+ *     responses:
+ *       201:
+ *         description: Staging entry created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/StagingEntryResponse'
+ *       400:
+ *         description: Bad request (missing fields, invalid types, etc.)
+ *       404:
+ *         description: Account not found
+ *       500:
+ *         description: Internal server error
+ *
+ *   get:
+ *     summary: List staging entries for an account
+ *     tags: [StagingEntries]
+ *     parameters:
+ *       - in: path
+ *         name: account_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the account to list staging entries for
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         schema:
+ *           $ref: '#/components/schemas/StagingEntryStatusEnum'
+ *         description: Filter by status
+ *     responses:
+ *       200:
+ *         description: List of staging entries
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/StagingEntriesListResponse'
+ *       404:
+ *         description: Account not found
+ *       500:
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /accounts/{account_id}/staging-entries/files:
+ *   post:
+ *     summary: Upload a CSV file of staging entries
+ *     tags: [StagingEntries]
+ *     parameters:
+ *       - in: path
+ *         name: account_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the account to create staging entries for
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *               - processing_mode
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: CSV file with staging entry data
+ *               processing_mode:
+ *                 $ref: '#/components/schemas/StagingEntryProcessingModeEnum'
+ *     responses:
+ *       200:
+ *         description: All entries successfully ingested
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 successful_ingestions:
+ *                   type: integer
+ *                   description: Number of entries successfully created
+ *                 failed_ingestions:
+ *                   type: integer
+ *                   description: Number of entries that failed to create
+ *                 error_details:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       line:
+ *                         type: integer
+ *                         description: Line number in the CSV file
+ *                       error:
+ *                         type: string
+ *                         description: Error message
+ *       207:
+ *         description: Partial success (some entries failed)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 successful_ingestions:
+ *                   type: integer
+ *                 failed_ingestions:
+ *                   type: integer
+ *                 error_details:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       line:
+ *                         type: integer
+ *                       error:
+ *                         type: string
+ *       400:
+ *         description: Bad request (invalid file format, missing fields, etc.)
+ *       404:
+ *         description: Account not found
+ *       500:
+ *         description: Internal server error
+ */
 
 const createStagingEntryHandler: RequestHandler<StagingEntryParams, any, CreateStagingEntryRequest> = async (req, res, next) => {
   try {

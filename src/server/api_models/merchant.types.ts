@@ -7,26 +7,21 @@
  *     CreateMerchantRequest:
  *       type: object
  *       required:
- *         - merchant_id
- *         - name
+ *         - merchant_name
  *       properties:
- *         merchant_id:
- *           type: string
- *           description: Unique identifier for the merchant.
- *           example: "merchant001"
- *         name:
+ *         merchant_name:
  *           type: string
  *           description: The name of the merchant.
  *           example: Acme Corp
  *     MerchantResponse:
  *       type: object
  *       properties:
- *         id:
+ *         merchant_id:
  *           type: string
  *           format: uuid
  *           description: The unique identifier for the merchant.
  *           example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
- *         name:
+ *         merchant_name:
  *           type: string
  *           description: The name of the merchant.
  *           example: Acme Corp
@@ -44,8 +39,7 @@
  *          $ref: '#/components/schemas/MerchantResponse'
  */
 export interface CreateMerchantRequest {
-  merchant_id: string;
-  name: string;
+  merchant_name: string;
   // Potentially other properties like contact_email, address, etc.
 }
 
@@ -54,8 +48,8 @@ export interface CreateMerchantRequest {
 export interface UpdateMerchantRequest extends Partial<CreateMerchantRequest> {}
 
 export interface MerchantResponse {
-  id: string;
-  name: string;
+  merchant_id: string;
+  merchant_name: string;
   // Include other relevant fields that are safe to expose via API
   created_at: Date;
   updated_at: Date;
