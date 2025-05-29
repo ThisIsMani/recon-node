@@ -97,7 +97,26 @@ export class TransactionTask extends BaseTask implements ReconTask {
     }
     
     // Validate currency match between staging entry and account
+    logger.log(`TransactionTask: Validating currency - staging entry: ${this.currentStagingEntry.currency}, account: ${this.currentStagingEntry.account.currency}`);
     if (this.currentStagingEntry.currency !== this.currentStagingEntry.account.currency) {
+      // Update staging entry status to NEEDS_MANUAL_REVIEW
+      const updateResult = await this.updateStagingEntryStatus(
+        this.currentStagingEntry.staging_entry_id,
+        {
+          status: 'NEEDS_MANUAL_REVIEW',
+          metadata: {
+            ...(this.currentStagingEntry.metadata as object || {}),
+            manual_review_reason: 'Currency mismatch between staging entry and account',
+            staging_entry_currency: this.currentStagingEntry.currency,
+            account_currency: this.currentStagingEntry.account.currency
+          }
+        }
+      );
+      
+      if (updateResult.isErr()) {
+        logger.error(`Failed to update staging entry status: ${updateResult.error.message}`);
+      }
+      
       return err(new ValidationError('Currency mismatch between staging entry and account', { 
         stagingEntryId: this.currentStagingEntry.staging_entry_id,
         stagingEntryCurrency: this.currentStagingEntry.currency,

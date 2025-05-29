@@ -75,6 +75,8 @@ describe('Entry API - GET /api/accounts/:account_id/entries', () => {
       data: {
         merchant_id: testMerchant.merchant_id,
         status: TransactionStatus.POSTED,
+        amount: new Prisma.Decimal(100),
+        currency: 'USD',
       },
     });
 

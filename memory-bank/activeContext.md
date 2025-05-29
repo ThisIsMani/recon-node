@@ -5,6 +5,23 @@ We've completed a full migration of the codebase from JavaScript to TypeScript, 
 
 ## Recent Work
 
+### Transaction API Enhancements (May 29, 2025)
+We've enhanced the transaction system with the following improvements:
+
+1. **Added Amount and Currency Fields**:
+   - Added `amount` (Decimal) and `currency` (String) fields to the Transaction table
+   - These fields are now required when creating transactions
+   - Enhanced validation to ensure all entries in a transaction share the same currency
+
+2. **Grouped Transaction List API**:
+   - Modified the transaction list API to return transactions grouped by `logical_transaction_id`
+   - All versions of a logical transaction are now included in each group
+   - Each transaction includes `from_accounts` and `to_accounts` arrays derived from its entries
+
+3. **Enhanced Response Structure**:
+   - Transaction responses now include detailed account information for better usability
+   - The grouped structure makes it easier to track transaction evolution across versions
+
 ### Test Suite Stabilization (May 23, 2025)
 We've resolved issues with the tests by:
 

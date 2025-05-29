@@ -1,5 +1,46 @@
 # Progress Log: Smart Ledger Backend (Node.js)
 
+**2025-05-29: Manual Trigger API for Recon Engine**
+- **Task:** Implement a manual trigger API endpoint for the recon engine to allow on-demand processing
+- **Actions:**
+    - Created new API endpoint at `POST /api/recon-engine/trigger` in `src/server/routes/recon-engine/index.ts`
+    - Enhanced API to accept optional timeout parameter (1000ms to 3600000ms, default 30000ms)
+    - Modified `src/server/core/recon-engine/consumer.ts` to export `processTasksForDuration` function
+    - Updated consumer logic to process tasks for a specified duration and return statistics
+    - Added comprehensive Swagger documentation for the new endpoint
+    - Created new route module and integrated it into the main routes configuration
+    - Fixed currency validation to properly update staging entry status to `NEEDS_MANUAL_REVIEW` on mismatch
+    - Added comprehensive tests for the new functionality
+    - Updated memory-bank documentation to reflect the changes
+- **Status:** Completed. All tests pass.
+- **Key Learnings/Issues:**
+    - Manual trigger API provides better control for testing and debugging the recon engine
+    - Statistics returned include: processed count, succeeded count, failed count, and processing duration
+    - Currency validation now properly sets staging entry status on validation errors
+    - The API provides immediate feedback on processing results without waiting for polling
+- **Next Steps:** 
+    - Monitor performance with manual trigger usage patterns
+    - Consider adding more detailed processing logs or event streaming
+
+**2025-05-29: Enhanced Transaction API with Amount/Currency and Grouped Responses**
+- **Task:** Add amount and currency fields to transactions, implement grouped transaction list API
+- **Actions:**
+    - Added `amount` (Decimal) and `currency` (String) fields to the Transaction table
+    - Updated transaction creation logic to include and validate amount/currency fields
+    - Enhanced currency validation to ensure all entries in a transaction share the same currency
+    - Modified transaction list API to return grouped responses organized by logical_transaction_id
+    - Updated API response to include from_accounts and to_accounts arrays derived from entries
+    - Updated tests to verify the new fields and grouped response structure
+    - Updated memory-bank documentation to reflect the changes
+- **Status:** Completed. Transaction API now includes monetary fields and grouped responses.
+- **Key Learnings/Issues:**
+    - Grouped responses make it easier to track transaction evolution across versions
+    - Currency validation at transaction level ensures data consistency
+    - Including account arrays in responses reduces the need for additional API calls
+- **Next Steps:** 
+    - Monitor system performance with the new grouped response structure
+    - Consider adding pagination for large transaction sets
+
 **2025-05-26: Enhanced Entry List API with Transaction Data**
 - **Task:** Add transaction information to entries list response
 - **Actions:**

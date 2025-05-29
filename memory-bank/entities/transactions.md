@@ -18,6 +18,8 @@ model Transaction {
   version                Int               @default(1)
   merchant_id            String            @db.VarChar(255)
   status                 TransactionStatus
+  amount                 Decimal           @db.Decimal(19, 4)
+  currency               String            @db.VarChar(3)
   created_at             DateTime          @default(now())
   updated_at             DateTime          @updatedAt
   discarded_at           DateTime?
@@ -35,15 +37,16 @@ model Transaction {
 
 **API Endpoints:**
 - `GET /api/merchants/:merchant_id/transactions`: List transactions for the specified merchant. Supports filtering by `status`, `logical_transaction_id`, and `version` via query parameters.
+  - **Response Structure:** Returns a grouped list where transactions are organized by `logical_transaction_id`, with all versions included within each group. Each transaction includes arrays of `from_accounts` and `to_accounts` derived from its associated entries.
   - **Note:** There is no `POST` endpoint for creating transactions directly via the API. Transactions are created through internal system processes.
 
-**Core Logic (`src/server/core/transaction/index.js`):**
-- `listTransactions(merchant_id, queryParams)`: Retrieves transactions for a given merchant, allowing filtering. Includes related entries.
+**Core Logic (`src/server/core/transaction/index.ts`):**
+- `listTransactions(merchant_id, queryParams)`: Retrieves transactions for a given merchant, allowing filtering. Returns transactions grouped by `logical_transaction_id` with all versions included.
 - `createTransactionInternal(transactionShellData, actualEntryData, expectedEntryData, callingTx?)`: (Internal function) Creates a transaction and its two associated, balanced entries (actual and expected) atomically using `prisma.$transaction`. It performs a balancing check (debits vs. credits) before creation.
-  - `transactionShellData`: Contains `merchant_id`, `status`, `metadata`, etc.
+  - `transactionShellData`: Contains `merchant_id`, `status`, `amount`, `currency`, `metadata`, etc.
   - `actualEntryData`, `expectedEntryData`: Data for the two entries to be created.
   - `callingTx` (optional): Allows participation in an existing Prisma transaction.
-  - Throws `BalanceError` if entries do not balance.
+  - Throws `BalanceError` if entries do not balance or have mismatched currencies.
 
 **Lifecycle & Purpose:**
 - `EXPECTED`: Typically, a transaction initially created by the recon engine will have one `POSTED` entry (from an initial staging entry) and one `EXPECTED` entry (the contra-entry). The transaction status itself will be `POSTED` in this scenario, but it contains an expected leg.

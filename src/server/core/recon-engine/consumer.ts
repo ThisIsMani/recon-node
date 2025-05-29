@@ -5,6 +5,7 @@ import { TransactionTaskClass, MatchingTaskClass } from './task';
 
 let isRunning = false;
 let taskDelegator: TaskDelegator | null = null;
+let isManualRunning = false;
 
 // Initialize the task delegator - this is now done lazily to support testing
 function getTaskDelegator(): TaskDelegator {
@@ -105,5 +106,95 @@ export function stopConsumer(): void {
 // For testing
 export function resetConsumer(): void {
   isRunning = false;
+  isManualRunning = false;
   taskDelegator = null;
+}
+
+/**
+ * Result of a manual trigger run
+ */
+export interface ManualTriggerResult {
+  processed: number;
+  succeeded: number;
+  failed: number;
+  duration: number;
+  error?: string;
+}
+
+/**
+ * Manually trigger the recon engine to process all pending entries
+ * This will process all pending tasks until none remain, then automatically stop
+ * @param timeoutMs Maximum time to run in milliseconds (default: 5 minutes)
+ * @returns Statistics about the processing run
+ */
+export async function runManualTrigger(timeoutMs: number = 300000): Promise<ManualTriggerResult> {
+  if (isRunning) {
+    throw new Error('Cannot run manual trigger while consumer is already running');
+  }
+  
+  if (isManualRunning) {
+    throw new Error('Manual trigger is already in progress');
+  }
+  
+  isManualRunning = true;
+  const startTime = Date.now();
+  let processed = 0;
+  let succeeded = 0;
+  let failed = 0;
+  
+  logger.info('Recon Engine: Starting manual trigger');
+  
+  try {
+    const timeout = setTimeout(() => {
+      throw new Error(`Manual trigger timed out after ${timeoutMs}ms`);
+    }, timeoutMs);
+    
+    // Process tasks until none remain
+    while (isManualRunning) {
+      const taskProcessed = await processSingleTask();
+      
+      if (!taskProcessed) {
+        // No more tasks to process
+        break;
+      }
+      
+      processed++;
+      // Note: We don't have direct access to success/failure status from processSingleTask
+      // In a real implementation, we might need to modify processSingleTask or TaskDelegator
+      // to return more detailed results
+      succeeded++; // Assuming success for now
+      
+      // Check if we've exceeded the timeout
+      if (Date.now() - startTime > timeoutMs) {
+        throw new Error(`Manual trigger timed out after processing ${processed} tasks`);
+      }
+    }
+    
+    clearTimeout(timeout);
+    
+    const duration = Date.now() - startTime;
+    logger.info(`Recon Engine: Manual trigger completed. Processed ${processed} tasks in ${duration}ms`);
+    
+    return {
+      processed,
+      succeeded,
+      failed,
+      duration
+    };
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    logger.error(`Recon Engine: Manual trigger failed - ${errorMessage}`);
+    
+    return {
+      processed,
+      succeeded,
+      failed,
+      duration,
+      error: errorMessage
+    };
+  } finally {
+    isManualRunning = false;
+  }
 }

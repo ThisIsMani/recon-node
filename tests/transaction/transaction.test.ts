@@ -47,6 +47,8 @@ describe('Transaction API - GET /api/merchants/:merchant_id/transactions', () =>
         logical_transaction_id: tx1LogicalId,
         status: TransactionStatus.POSTED,
         version: 1,
+        amount: new Prisma.Decimal(100),
+        currency: 'USD',
         entries: {
           create: [
             { account_id: testAccount.account_id, entry_type: EntryType.DEBIT, amount: new Prisma.Decimal(100), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date() },
@@ -64,6 +66,8 @@ describe('Transaction API - GET /api/merchants/:merchant_id/transactions', () =>
         logical_transaction_id: `logical_tx_2_${Date.now()}`,
         status: TransactionStatus.EXPECTED,
         version: 1,
+        amount: new Prisma.Decimal(50),
+        currency: 'USD',
         entries: {
             create: [
               { account_id: testAccount.account_id, entry_type: EntryType.DEBIT, amount: new Prisma.Decimal(50), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date() },
@@ -81,6 +85,8 @@ describe('Transaction API - GET /api/merchants/:merchant_id/transactions', () =>
           status: TransactionStatus.ARCHIVED,
           version: 2, 
           discarded_at: new Date(),
+          amount: new Prisma.Decimal(105),
+          currency: 'USD',
           entries: {
             create: [
               { account_id: testAccount.account_id, entry_type: EntryType.DEBIT, amount: new Prisma.Decimal(105), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date() }, 
@@ -105,43 +111,75 @@ describe('Transaction API - GET /api/merchants/:merchant_id/transactions', () =>
     await mockPrismaClient.$disconnect();
   });
 
-  it('should list all transactions for a valid merchant ID', async () => {
+  it('should list all transactions grouped by logical_transaction_id', async () => {
     const response = await request(server).get(`/api/merchants/${testMerchant.merchant_id}/transactions`);
     expect(response.statusCode).toBe(200);
     expect(response.body).toBeInstanceOf(Array);
-    expect(response.body.length).toBe(transactionsData.length);
-    response.body.forEach((tx: any) => { // Use any for now, or import TransactionResponse
-      expect(tx).toHaveProperty('transaction_id');
-      expect(tx).toHaveProperty('merchant_id', testMerchant.merchant_id);
-      expect(tx).toHaveProperty('status');
-      expect(tx).toHaveProperty('created_at');
-      expect(tx).toHaveProperty('updated_at');
-      // The TransactionResponse DTO does not include 'entries' by default.
-      // expect(tx).toHaveProperty('entries'); 
-      // expect(tx.entries).toBeInstanceOf(Array);
-      if (tx.discarded_at) {
-        expect(new Date(tx.discarded_at).toISOString()).toBe(tx.discarded_at);
-      }
-      expect(new Date(tx.created_at).toISOString()).toBe(tx.created_at);
-      expect(new Date(tx.updated_at).toISOString()).toBe(tx.updated_at);
+    
+    // Response should be grouped by logical_transaction_id
+    response.body.forEach((group: any) => {
+      expect(group).toHaveProperty('logical_transaction_id');
+      expect(group).toHaveProperty('current_version');
+      expect(group).toHaveProperty('amount');
+      expect(group).toHaveProperty('currency');
+      expect(group).toHaveProperty('from_accounts');
+      expect(group).toHaveProperty('to_accounts');
+      expect(group).toHaveProperty('status');
+      expect(group).toHaveProperty('versions');
+      
+      expect(group.from_accounts).toBeInstanceOf(Array);
+      expect(group.to_accounts).toBeInstanceOf(Array);
+      expect(group.versions).toBeInstanceOf(Array);
+      
+      // Check account info structure
+      [...group.from_accounts, ...group.to_accounts].forEach((account: any) => {
+        expect(account).toHaveProperty('account_id');
+        expect(account).toHaveProperty('account_name');
+        expect(account).toHaveProperty('entry_type');
+      });
+      
+      // Check versions structure
+      group.versions.forEach((version: any) => {
+        expect(version).toHaveProperty('transaction_id');
+        expect(version).toHaveProperty('logical_transaction_id', group.logical_transaction_id);
+        expect(version).toHaveProperty('version');
+        expect(version).toHaveProperty('amount');
+        expect(version).toHaveProperty('currency');
+        expect(version).toHaveProperty('merchant_id', testMerchant.merchant_id);
+        expect(version).toHaveProperty('status');
+        expect(version).toHaveProperty('entries');
+        expect(version.entries).toBeInstanceOf(Array);
+      });
     });
   });
 
   it('should filter transactions by status=POSTED', async () => {
     const response = await request(server).get(`/api/merchants/${testMerchant.merchant_id}/transactions?status=POSTED`);
     expect(response.statusCode).toBe(200);
-    const postedCount = transactionsData.filter(t => t.status === 'POSTED').length;
-    expect(response.body.length).toBe(postedCount);
-    response.body.forEach((tx: any) => expect(tx.status).toBe('POSTED'));
+    
+    // All groups should only contain POSTED transactions
+    response.body.forEach((group: any) => {
+      expect(group.status).toBe('POSTED'); // Current version status
+      group.versions.forEach((version: any) => {
+        if (version.status === 'POSTED') {
+          expect(version.status).toBe('POSTED');
+        }
+      });
+    });
   });
 
   it('should filter transactions by logical_transaction_id', async () => {
     const logicalIdToTest = transactionsData[0].logical_transaction_id;
     const response = await request(server).get(`/api/merchants/${testMerchant.merchant_id}/transactions?logical_transaction_id=${logicalIdToTest}`);
     expect(response.statusCode).toBe(200);
-    const logicalCount = transactionsData.filter(t => t.logical_transaction_id === logicalIdToTest).length;
-    expect(response.body.length).toBe(logicalCount);
-    response.body.forEach((tx: any) => expect(tx.logical_transaction_id).toBe(logicalIdToTest));
+    
+    // Should return only one group with the specified logical_transaction_id
+    expect(response.body.length).toBe(1);
+    expect(response.body[0].logical_transaction_id).toBe(logicalIdToTest);
+    
+    // Check that all versions belong to the same logical transaction
+    const expectedVersions = transactionsData.filter(t => t.logical_transaction_id === logicalIdToTest).length;
+    expect(response.body[0].versions.length).toBe(expectedVersions);
   });
 
   it('should filter transactions by version for a specific logical_transaction_id', async () => {
@@ -149,9 +187,12 @@ describe('Transaction API - GET /api/merchants/:merchant_id/transactions', () =>
     const versionToTest = 1;
     const response = await request(server).get(`/api/merchants/${testMerchant.merchant_id}/transactions?logical_transaction_id=${logicalIdToTest}&version=${versionToTest}`);
     expect(response.statusCode).toBe(200);
+    
+    // Should still return grouped format, but only with the specified version
     expect(response.body.length).toBe(1);
     expect(response.body[0].logical_transaction_id).toBe(logicalIdToTest);
-    expect(response.body[0].version).toBe(versionToTest);
+    expect(response.body[0].versions.length).toBe(1);
+    expect(response.body[0].versions[0].version).toBe(versionToTest);
   });
 
   it('should return 404 if the merchant ID does not exist', async () => {

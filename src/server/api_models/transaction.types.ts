@@ -1,5 +1,6 @@
 // API Models for Transaction Entity (Request/Response DTOs)
 import { TransactionStatus } from '@prisma/client'; // Assuming TransactionStatus enum is used
+import { EntryResponse } from './entry.types';
 
 /**
  * @openapi
@@ -19,6 +20,13 @@ import { TransactionStatus } from '@prisma/client'; // Assuming TransactionStatu
  *         version:
  *           type: integer
  *           description: The version number of this transaction instance.
+ *         amount:
+ *           type: number
+ *           format: decimal
+ *           description: The transaction amount (absolute value).
+ *         currency:
+ *           type: string
+ *           description: The currency code (e.g., USD, EUR).
  *         merchant_id:
  *           type: string
  *           description: The ID of the merchant this transaction belongs to.
@@ -41,10 +49,64 @@ import { TransactionStatus } from '@prisma/client'; // Assuming TransactionStatu
  *           type: object
  *           nullable: true
  *           description: Additional metadata for the transaction.
+ *         entries:
+ *           type: array
+ *           nullable: true
+ *           description: Array of entries associated with this transaction.
+ *           items:
+ *             $ref: '#/components/schemas/EntryResponse'
+ *     AccountInfo:
+ *       type: object
+ *       properties:
+ *         account_id:
+ *           type: string
+ *           description: The ID of the account.
+ *         account_name:
+ *           type: string
+ *           description: The name of the account.
+ *         entry_type:
+ *           type: string
+ *           enum: [DEBIT, CREDIT]
+ *           description: The type of entry for this account in the transaction.
+ *     GroupedTransactionResponse:
+ *       type: object
+ *       properties:
+ *         logical_transaction_id:
+ *           type: string
+ *           format: cuid
+ *           description: The logical identifier grouping all versions.
+ *         current_version:
+ *           type: integer
+ *           description: The current/latest version number.
+ *         amount:
+ *           type: number
+ *           format: decimal
+ *           description: The amount of the current version.
+ *         currency:
+ *           type: string
+ *           description: The currency of the current version.
+ *         from_accounts:
+ *           type: array
+ *           description: Accounts that are credited (money flows FROM).
+ *           items:
+ *             $ref: '#/components/schemas/AccountInfo'
+ *         to_accounts:
+ *           type: array
+ *           description: Accounts that are debited (money flows TO).
+ *           items:
+ *             $ref: '#/components/schemas/AccountInfo'
+ *         status:
+ *           $ref: '#/components/schemas/TransactionStatusEnum'
+ *           description: The status of the current version.
+ *         versions:
+ *           type: array
+ *           description: All versions of this logical transaction.
+ *           items:
+ *             $ref: '#/components/schemas/TransactionResponse'
  *     TransactionsListResponse:
  *       type: array
  *       items:
- *         $ref: '#/components/schemas/TransactionResponse'
+ *         $ref: '#/components/schemas/GroupedTransactionResponse'
  *     TransactionStatusEnum:
  *       type: string
  *       enum:
@@ -58,16 +120,34 @@ import { TransactionStatus } from '@prisma/client'; // Assuming TransactionStatu
 // If direct API creation/update of transactions is needed later,
 // CreateTransactionRequest and UpdateTransactionRequest can be defined here.
 
+export interface AccountInfo {
+  account_id: string;
+  account_name: string;
+  entry_type: 'DEBIT' | 'CREDIT';
+}
+
 export interface TransactionResponse {
   transaction_id: string;
   logical_transaction_id: string;
   version: number;
+  amount: number | string; // Can be Decimal from Prisma
+  currency: string;
   merchant_id: string;
   status: TransactionStatus;
   created_at: Date;
   updated_at: Date;
   discarded_at?: Date | null;
   metadata?: any | null; // Prisma's JsonValue can be complex
-  // Consider adding entries here if they are part of the standard response:
-  // entries?: EntryResponse[]; 
+  entries?: EntryResponse[]; // Array of associated entries
+}
+
+export interface GroupedTransactionResponse {
+  logical_transaction_id: string;
+  current_version: number;
+  amount: number | string;
+  currency: string;
+  from_accounts: AccountInfo[];
+  to_accounts: AccountInfo[];
+  status: TransactionStatus;
+  versions: TransactionResponse[];
 }

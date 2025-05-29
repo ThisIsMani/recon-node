@@ -64,6 +64,8 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
     (mockTxClient.transaction.create as jest.Mock).mockResolvedValue({ 
       transaction_id: 'new-tx-id', 
       ...transactionShellData,
+      amount: new Decimal('100'), // Added amount field
+      currency: 'USD', // Added currency field
       created_at: mockDate, // Add timestamps to mock
       updated_at: mockDate,
       logical_transaction_id: transactionShellData.logical_transaction_id || 'default-logical-id', // Ensure all fields of PrismaTransaction are present
@@ -98,6 +100,8 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
      (mockTxClient.transaction.create as jest.Mock).mockResolvedValueOnce({ 
       transaction_id: 'new-tx-id', 
       ...transactionShellData,
+      amount: new Decimal('100'), // Added amount field
+      currency: 'USD', // Added currency field
       created_at: mockDate, 
       updated_at: mockDate,
       logical_transaction_id: transactionShellData.logical_transaction_id || 'default-logical-id', 
@@ -117,7 +121,15 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
     const result = await createTransactionInternal(transactionShellData, actualEntryData, expectedEntryData);
 
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(mockTxClient.transaction.create).toHaveBeenCalledWith({ data: transactionShellData });
+    expect(mockTxClient.transaction.create).toHaveBeenCalledWith({ 
+      data: {
+        ...transactionShellData,
+        amount: new Decimal('100'),
+        currency: 'USD',
+        logical_transaction_id: undefined,
+        version: undefined,
+      }
+    });
     expect(entryCore.createEntryInternal).toHaveBeenCalledTimes(2);
     expect(entryCore.createEntryInternal).toHaveBeenCalledWith(
       { ...actualEntryData, transaction_id: 'new-tx-id' },
@@ -249,6 +261,8 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
     (mockCallingTxProvided.transaction.create as jest.Mock).mockResolvedValue({ 
       transaction_id: 'new-tx-id-from-callingTx', 
       ...transactionShellData,
+      amount: new Decimal('100'), // Added amount field
+      currency: 'USD', // Added currency field
       created_at: mockDateCallingTx, // Add timestamps
       updated_at: mockDateCallingTx,
       logical_transaction_id: transactionShellData.logical_transaction_id || 'default-logical-id-callingtx',
@@ -259,7 +273,15 @@ describe('Transaction Core Logic - createTransactionInternal', () => {
     await createTransactionInternal(transactionShellData, actualEntryData, expectedEntryData, mockCallingTxProvided);
 
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
-    expect(mockCallingTxProvided.transaction.create).toHaveBeenCalledWith({ data: transactionShellData });
+    expect(mockCallingTxProvided.transaction.create).toHaveBeenCalledWith({ 
+      data: {
+        ...transactionShellData,
+        amount: new Decimal('100'),
+        currency: 'USD',
+        logical_transaction_id: undefined,
+        version: undefined,
+      }
+    });
     expect(entryCore.createEntryInternal).toHaveBeenCalledWith(
       expect.objectContaining({ account_id: actualEntryData.account_id }),
       mockCallingTxProvided

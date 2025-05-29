@@ -128,6 +128,27 @@ The Recon Engine uses a task-based architecture:
     -   On overall success, updates `ProcessTracker` task status to `COMPLETED`.
     -   On failure, updates task status to `FAILED` and logs the error with contextual information.
 -   **`startConsumer()`**: Initiates polling loop with configurable interval using `RECON_ENGINE_POLL_INTERVAL_MS` from config.
+-   **`processTasksForDuration(durationMs: number)`**: 
+    -   Processes tasks for a specified duration (in milliseconds)
+    -   Returns statistics about processing: `{ processed, succeeded, failed, duration }`
+    -   Used by the manual trigger API to process tasks on-demand
+    -   Continues processing until the duration expires or no more tasks are available
+
+## Manual Trigger API (`src/server/routes/recon-engine/index.ts`)
+
+-   **Endpoint:** `POST /api/recon-engine/trigger`
+-   **Purpose:** Allows manual triggering of recon engine processing for testing and debugging
+-   **Request Body:**
+    -   `timeout` (optional): Processing timeout in milliseconds (1000-3600000, default 30000)
+-   **Response:**
+    -   `processed`: Total number of tasks processed
+    -   `succeeded`: Number of successfully processed tasks
+    -   `failed`: Number of failed tasks
+    -   `duration`: Actual processing duration in milliseconds
+-   **Use Cases:**
+    -   Testing recon engine behavior without waiting for polling intervals
+    -   Debugging specific staging entries by triggering immediate processing
+    -   Performance testing with controlled processing windows
 
 ## Test Coverage
 

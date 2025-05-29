@@ -74,6 +74,11 @@
         - For each task, it fetches the corresponding `StagingEntry`.
         - It calls `reconEngine.processStagingEntryWithRecon(stagingEntry, merchantId)`.
         - Based on the outcome (success or error) of `processStagingEntryWithRecon`, it updates the `ProcessTracker` task status to `COMPLETED` or `FAILED`.
+    - **Manual Trigger API (`POST /api/recon-engine/trigger`):** Provides on-demand processing capability:
+        - Accepts optional timeout parameter (1000-3600000ms)
+        - Calls `consumer.processTasksForDuration()` to process tasks for specified duration
+        - Returns processing statistics: processed, succeeded, failed counts and duration
+        - Useful for testing, debugging, and controlled processing windows
     - This pattern decouples the initial data ingestion from the more complex reconciliation and transaction creation process.
 
 - **Recon Engine Core (`src/server/core/recon-engine/engine.js`):**

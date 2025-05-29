@@ -62,7 +62,11 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment', () => {
     const orderId = 'order_fulfill_success';
     const originalTransaction = await prisma.transaction.create({
       data: {
-        merchant_id: merchant.merchant_id, status: TransactionStatus.EXPECTED, logical_transaction_id: `ltid_${orderId}`,
+        merchant_id: merchant.merchant_id, 
+        status: TransactionStatus.EXPECTED, 
+        logical_transaction_id: `ltid_${orderId}`,
+        amount: new Decimal('123.45'),
+        currency: 'USD',
         entries: { create: [
             { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('123.45'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderId } as Prisma.JsonObject },
             { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('123.45'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderId } as Prisma.JsonObject },
@@ -102,7 +106,13 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment', () => {
     });
     const orderId = 'order_mismatch_amount';
     const originalTransaction = await prisma.transaction.create({
-      data: { merchant_id: merchant.merchant_id, status: TransactionStatus.EXPECTED, logical_transaction_id: `ltid_${orderId}`, entries: { create: [
+      data: { 
+        merchant_id: merchant.merchant_id, 
+        status: TransactionStatus.EXPECTED, 
+        logical_transaction_id: `ltid_${orderId}`,
+        amount: new Decimal('100.00'),
+        currency: 'USD',
+        entries: { create: [
         { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderId } as Prisma.JsonObject },
         { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderId } as Prisma.JsonObject },
       ]}},
@@ -136,7 +146,13 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment', () => {
     });
     const orderId = 'order_mismatch_currency';
     const originalTransaction = await prisma.transaction.create({
-      data: { merchant_id: merchant.merchant_id, status: TransactionStatus.EXPECTED, logical_transaction_id: `ltid_${orderId}`, entries: { create: [
+      data: { 
+        merchant_id: merchant.merchant_id, 
+        status: TransactionStatus.EXPECTED, 
+        logical_transaction_id: `ltid_${orderId}`,
+        amount: new Decimal('100.00'),
+        currency: 'USD',
+        entries: { create: [
         { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderId } as Prisma.JsonObject },
         { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderId } as Prisma.JsonObject },
       ]}},
@@ -167,7 +183,13 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment', () => {
     });
     const orderId = 'order_mismatch_type';
     const originalTransaction = await prisma.transaction.create({
-      data: { merchant_id: merchant.merchant_id, status: TransactionStatus.EXPECTED, logical_transaction_id: `ltid_${orderId}`, entries: { create: [
+      data: { 
+        merchant_id: merchant.merchant_id, 
+        status: TransactionStatus.EXPECTED, 
+        logical_transaction_id: `ltid_${orderId}`,
+        amount: new Decimal('100.00'),
+        currency: 'USD',
+        entries: { create: [
         { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderId } as Prisma.JsonObject },
         { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('100.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderId } as Prisma.JsonObject },
       ]}},
@@ -268,16 +290,28 @@ describe('Recon Engine - Staging Entry Matching & Fulfillment', () => {
     const orderIdAmbiguous = 'order_ambiguous_manual';
     // Create two transactions with EXPECTED entries for the same order_id on account2
     await prisma.transaction.create({
-      data: { merchant_id: merchant.merchant_id, status: TransactionStatus.EXPECTED, logical_transaction_id: `ltid_${orderIdAmbiguous}_1`, entries: { create: [
-        { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('50.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderIdAmbiguous } as Prisma.JsonObject },
-        { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('50.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderIdAmbiguous } as Prisma.JsonObject },
-      ]}}
+      data: { 
+        merchant_id: merchant.merchant_id, 
+        status: TransactionStatus.EXPECTED, 
+        logical_transaction_id: `ltid_${orderIdAmbiguous}_1`,
+        amount: new Decimal('50.00'),
+        currency: 'USD',
+        entries: { create: [
+          { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('50.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderIdAmbiguous } as Prisma.JsonObject },
+          { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('50.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderIdAmbiguous } as Prisma.JsonObject },
+        ]}}
     });
     await prisma.transaction.create({
-      data: { merchant_id: merchant.merchant_id, status: TransactionStatus.EXPECTED, logical_transaction_id: `ltid_${orderIdAmbiguous}_2`, entries: { create: [
-        { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('75.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderIdAmbiguous } as Prisma.JsonObject },
-        { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('75.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderIdAmbiguous } as Prisma.JsonObject },
-      ]}}
+      data: { 
+        merchant_id: merchant.merchant_id, 
+        status: TransactionStatus.EXPECTED, 
+        logical_transaction_id: `ltid_${orderIdAmbiguous}_2`,
+        amount: new Decimal('75.00'),
+        currency: 'USD',
+        entries: { create: [
+          { account_id: account1.account_id, entry_type: EntryType.DEBIT, amount: new Decimal('75.00'), currency: 'USD', status: EntryStatus.POSTED, effective_date: new Date(), metadata: { order_id: orderIdAmbiguous } as Prisma.JsonObject },
+          { account_id: account2.account_id, entry_type: EntryType.CREDIT, amount: new Decimal('75.00'), currency: 'USD', status: EntryStatus.EXPECTED, effective_date: new Date(), metadata: { order_id: orderIdAmbiguous } as Prisma.JsonObject },
+        ]}}
     });
 
     const stagingEntryAmbig = await prisma.stagingEntry.create({

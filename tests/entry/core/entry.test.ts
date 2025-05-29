@@ -48,7 +48,9 @@ describe('Entry Core Logic', () => {
         merchant_id: testMerchant.merchant_id, 
         status: TransactionStatus.POSTED,
         logical_transaction_id: '', 
-        version: 1, 
+        version: 1,
+        amount: new Prisma.Decimal(100),
+        currency: 'USD',
         metadata: Prisma.JsonNull // This is what Prisma actually expects
     };
     
@@ -243,8 +245,8 @@ describe('Entry Core Logic', () => {
         expect(mockTxClient.account.findUnique).toHaveBeenCalledWith({ where: { account_id: entryData.account_id } });
         expect(mockTxClient.entry.create).toHaveBeenCalledWith({
           data: {
-            account_id: entryData.account_id,
-            transaction_id: entryData.transaction_id,
+            account: { connect: { account_id: entryData.account_id } },
+            transaction: { connect: { transaction_id: entryData.transaction_id } },
             entry_type: entryData.entry_type,
             amount: new Prisma.Decimal(entryData.amount.toString()),
             currency: entryData.currency,

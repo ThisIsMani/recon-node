@@ -63,6 +63,8 @@ model Transaction {
   transaction_id         String            @id @default(cuid())
   logical_transaction_id String            @default(cuid())
   version                Int               @default(1)
+  amount                 Decimal           @db.Decimal(20, 4)
+  currency               String            @db.VarChar(3)
   merchant_id            String            @db.VarChar(255)
   status                 TransactionStatus
   created_at             DateTime          @default(now())

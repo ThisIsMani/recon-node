@@ -5,7 +5,8 @@ import accountRoutes from './account';
 import reconRulesRoutes from './recon-rules'; 
 import stagingEntryRoutes from './staging-entry'; 
 import entryRoutes from './entry'; 
-import transactionRoutes from './transaction'; 
+import transactionRoutes from './transaction';
+import { reconEngineRouter } from './recon-engine'; 
 
 const router: Router = express.Router();
 
@@ -26,6 +27,9 @@ router.use('/accounts/:account_id/entries', entryRoutes);
 
 // Mount transaction routes (nested under merchants)
 router.use('/merchants/:merchant_id/transactions', transactionRoutes);
+
+// Mount recon engine routes
+router.use('/recon-engine', reconEngineRouter);
 
 // Mount other resource routes here in the future
 // e.g., import ledgerRoutes from './ledger';

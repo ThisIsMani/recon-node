@@ -67,9 +67,10 @@ export abstract class BaseTask {
       logger.log(`Updated staging entry ${stagingEntryId} status to ${status}`);
       return ok(updatedEntry);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       const appError = new ProcessingError(
-        `Failed to update staging entry ${stagingEntryId} status: ${error instanceof Error ? error.message : String(error)}`,
-        { stagingEntryId, taskId: this.taskId }
+        `Failed to update staging entry ${stagingEntryId} status: ${errorMessage}`,
+        { stagingEntryId, taskId: this.taskId, originalError: errorMessage }
       );
       
       logger.error(appError);

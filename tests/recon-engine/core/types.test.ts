@@ -7,7 +7,7 @@ import {
 import {
   StagingEntryStatusUpdate
 } from '../../../src/server/api_models/staging_entry.types'; // Updated path
-import { StagingEntryStatus, AccountType, TransactionStatus, EntryStatus } from '@prisma/client';
+import { StagingEntryStatus, AccountType, TransactionStatus, EntryStatus, Prisma } from '@prisma/client';
 
 describe('Recon Engine Types', () => {
   describe('StagingEntryWithAccount', () => {
@@ -74,6 +74,8 @@ describe('Recon Engine Types', () => {
         status: TransactionStatus.EXPECTED,
         logical_transaction_id: 'logical-123',
         version: 1,
+        amount: new Prisma.Decimal(100),
+        currency: 'USD',
         created_at: new Date(),
         updated_at: new Date(),
         metadata: {},

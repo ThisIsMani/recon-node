@@ -145,18 +145,28 @@ const createEntryInternal = async (
   }
 
   try {
+    // Generate custom entry_id for EXPECTED entries
+    const entryData: Prisma.EntryCreateInput = {
+      account: { connect: { account_id } },
+      transaction: { connect: { transaction_id } },
+      entry_type,
+      amount: new Prisma.Decimal(amount.toString()), // Ensure amount is Decimal
+      currency,
+      status,
+      effective_date: new Date(effective_date),
+      metadata: metadata || Prisma.JsonNull,
+      discarded_at: discarded_at ? new Date(discarded_at) : null,
+    };
+
+    // If creating an EXPECTED entry, prefix the ID with "expected_"
+    if (status === PrismaEntryStatusEnum.EXPECTED) {
+      const { customAlphabet } = await import('nanoid');
+      const nanoid = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', 21);
+      entryData.entry_id = `expected_${nanoid()}`;
+    }
+
     const newEntry = await prismaClient.entry.create({
-      data: {
-        account_id,
-        transaction_id,
-        entry_type,
-        amount: new Prisma.Decimal(amount.toString()), // Ensure amount is Decimal
-        currency,
-        status,
-        effective_date: new Date(effective_date),
-        metadata: metadata || Prisma.JsonNull,
-        discarded_at: discarded_at ? new Date(discarded_at) : null,
-      },
+      data: entryData,
     });
     return newEntry as Entry; // Cast to Domain model
   } catch (error) {
