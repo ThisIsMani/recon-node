@@ -7,7 +7,7 @@ const router: Router = express.Router();
 
 /**
  * @swagger
- * /api/recon-engine/trigger:
+ * /recon-engine/trigger:
  *   post:
  *     summary: Manually trigger the recon engine
  *     description: |
@@ -138,7 +138,7 @@ router.post('/trigger', async (req: Request, res: Response) => {
 
 /**
  * @swagger
- * /api/recon-engine/status:
+ * /recon-engine/status:
  *   get:
  *     summary: Get recon engine status
  *     description: Returns the current status of the recon engine consumer
