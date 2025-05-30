@@ -34,7 +34,7 @@ export interface CreateEntryInternalData { // Added export
 
 // Type for the returned entry from listEntries, including relations, using Domain Model
 type EntryWithRelations = Entry & { // Use Domain Entry
-  account: Pick<PrismaAccount, 'account_id' | 'account_name' | 'merchant_id'> | null; // Related models can remain Prisma types for now
+  account: Pick<PrismaAccount, 'account_id' | 'account_name' | 'merchant_id' | 'account_type'> | null; // Related models can remain Prisma types for now
   transaction: Pick<PrismaTransaction, 'status' | 'transaction_id' | 'logical_transaction_id' | 'version'> | null; // Related models can remain Prisma types for now
 };
 
@@ -65,7 +65,8 @@ const listEntries = async (accountId: string, queryParams: ListEntriesQueryParam
           select: {
             account_id: true,
             account_name: true,
-            merchant_id: true
+            merchant_id: true,
+            account_type: true
           }
         },
         transaction: {

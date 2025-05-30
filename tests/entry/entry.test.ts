@@ -117,7 +117,11 @@ describe('Entry API - GET /api/accounts/:account_id/entries', () => {
     expect(response.body.length).toBe(entryData.length);
     response.body.forEach((entry: any) => { // Use 'any' or import EntryResponse
       expect(entry).toHaveProperty('entry_id');
-      expect(entry).toHaveProperty('account_id', testAccount.account_id);
+      expect(entry).toHaveProperty('account');
+      expect(entry.account).toHaveProperty('account_id', testAccount.account_id);
+      expect(entry.account).toHaveProperty('account_name', testAccount.account_name);
+      expect(entry.account).toHaveProperty('merchant_id', testMerchant.merchant_id);
+      expect(entry.account).toHaveProperty('account_type', testAccount.account_type);
       expect(entry).toHaveProperty('transaction_id', dummyTransaction.transaction_id);
       expect(entry).toHaveProperty('entry_type');
       expect(entry).toHaveProperty('amount');

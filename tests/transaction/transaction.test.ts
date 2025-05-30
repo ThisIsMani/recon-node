@@ -133,9 +133,11 @@ describe('Transaction API - GET /api/merchants/:merchant_id/transactions', () =>
       
       // Check account info structure
       [...group.from_accounts, ...group.to_accounts].forEach((account: any) => {
+        // Now accounts are directly AccountSummary objects, not wrapped
         expect(account).toHaveProperty('account_id');
         expect(account).toHaveProperty('account_name');
-        expect(account).toHaveProperty('entry_type');
+        expect(account).toHaveProperty('merchant_id');
+        expect(account).toHaveProperty('account_type');
       });
       
       // Check versions structure
@@ -149,6 +151,26 @@ describe('Transaction API - GET /api/merchants/:merchant_id/transactions', () =>
         expect(version).toHaveProperty('status');
         expect(version).toHaveProperty('entries');
         expect(version.entries).toBeInstanceOf(Array);
+        
+        // Check entry structure
+        version.entries.forEach((entry: any) => {
+          expect(entry).toHaveProperty('entry_id');
+          expect(entry).toHaveProperty('account');
+          expect(entry).toHaveProperty('transaction_id');
+          expect(entry).toHaveProperty('entry_type');
+          expect(entry).toHaveProperty('amount');
+          expect(entry).toHaveProperty('currency');
+          expect(entry).toHaveProperty('status');
+          expect(entry).toHaveProperty('effective_date');
+          
+          // Check account structure within entry
+          if (entry.account) {
+            expect(entry.account).toHaveProperty('account_id');
+            expect(entry.account).toHaveProperty('account_name');
+            expect(entry.account).toHaveProperty('merchant_id');
+            expect(entry.account).toHaveProperty('account_type');
+          }
+        });
       });
     });
   });

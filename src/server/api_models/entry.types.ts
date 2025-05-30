@@ -1,11 +1,13 @@
 // API Models for Entry Entity (Request/Response DTOs)
 import { EntryType, EntryStatus as PrismaEntryStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library'; // For amount
+import { AccountSummary } from './account.types';
 
 /**
  * @openapi
  * components:
  *   schemas:
+ *     # AccountInfo is now replaced by AccountSummary from account.types.ts
  *     TransactionInfo:
  *       type: object
  *       properties:
@@ -30,10 +32,10 @@ import { Decimal } from '@prisma/client/runtime/library'; // For amount
  *           type: string
  *           format: cuid
  *           description: The unique identifier for the entry.
- *         account_id:
- *           type: string
- *           format: uuid
- *           description: The ID of the account this entry belongs to.
+ *         account:
+ *           $ref: '#/components/schemas/AccountSummary'
+ *           nullable: true
+ *           description: Information about the account this entry belongs to.
  *         transaction_id:
  *           type: string
  *           format: cuid
@@ -94,6 +96,8 @@ import { Decimal } from '@prisma/client/runtime/library'; // For amount
 // Entries are typically created via internal processes (e.g., transaction creation).
 // If direct API creation is needed, a CreateEntryRequest would be defined here.
 
+// AccountInfo removed - using AccountSummary from account.types.ts instead
+
 export interface TransactionInfo {
   transaction_id: string;
   logical_transaction_id: string;
@@ -103,7 +107,7 @@ export interface TransactionInfo {
 
 export interface EntryResponse {
   entry_id: string;
-  account_id: string;
+  account?: AccountSummary | null;
   transaction_id: string;
   entry_type: EntryType;
   amount: Decimal | number; // API might return number, Prisma uses Decimal

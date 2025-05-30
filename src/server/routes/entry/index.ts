@@ -72,7 +72,12 @@ const listEntriesHandler: RequestHandler<EntryRouteParams, any, any, EntryQuery>
     // Map Prisma models to API models
     const responseEntries: EntryResponse[] = entryDataList.map(entryData => ({
         entry_id: entryData.entry_id,
-        account_id: entryData.account_id,
+        account: entryData.account ? {
+          account_id: entryData.account.account_id,
+          merchant_id: entryData.account.merchant_id,
+          account_name: entryData.account.account_name,
+          account_type: entryData.account.account_type
+        } : null,
         transaction_id: entryData.transaction_id,
         entry_type: entryData.entry_type,
         amount: entryData.amount, // Assuming core logic returns Decimal or number compatible with EntryResponse

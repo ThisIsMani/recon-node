@@ -5,7 +5,8 @@ import prisma from '../../../services/prisma';
 import logger from '../../../services/logger';
 import { TransactionStatus } from '@prisma/client'; // For query param typing
 import { AppError } from '../../../errors/AppError'; // Import AppError
-import { TransactionResponse, GroupedTransactionResponse, AccountInfo } from '../../api_models/transaction.types'; // Import new API model
+import { TransactionResponse, GroupedTransactionResponse } from '../../api_models/transaction.types'; // Import new API model
+import { AccountSummary } from '../../api_models/account.types'; // Import AccountSummary
 import { EntryResponse } from '../../api_models/entry.types'; // Import entry API model
 
 const router: Router = express.Router({ mergeParams: true });
@@ -71,98 +72,145 @@ interface TransactionQuery {
  *         description: Internal server error
  */
 
+/**
+ * Helper function to map entry to API response format
+ */
+const mapEntryToResponse = (entry: any, transactionId: string): EntryResponse => ({
+  entry_id: entry.entry_id,
+  account: entry.account ? {
+    account_id: entry.account.account_id,
+    merchant_id: entry.account.merchant_id,
+    account_name: entry.account.account_name,
+    account_type: entry.account.account_type
+  } : null,
+  transaction_id: transactionId,
+  entry_type: entry.entry_type,
+  amount: entry.amount.toString(),
+  currency: entry.currency,
+  status: entry.status,
+  effective_date: entry.effective_date,
+  metadata: entry.metadata || null,
+  discarded_at: entry.discarded_at || null,
+  created_at: entry.created_at,
+  updated_at: entry.updated_at
+});
+
+/**
+ * Helper function to map transaction to API response format
+ */
+const mapTransactionToResponse = (txData: any): TransactionResponse => ({
+  transaction_id: txData.transaction_id,
+  logical_transaction_id: txData.logical_transaction_id,
+  version: txData.version,
+  amount: txData.amount.toString(),
+  currency: txData.currency,
+  merchant_id: txData.merchant_id,
+  status: txData.status,
+  created_at: txData.created_at,
+  updated_at: txData.updated_at,
+  discarded_at: txData.discarded_at || null,
+  metadata: txData.metadata || null,
+  entries: txData.entries 
+    ? txData.entries.map((entry: any) => mapEntryToResponse(entry, txData.transaction_id))
+    : []
+});
+
+/**
+ * Helper function to extract unique account information from entries
+ */
+const extractAccountInfo = (entries: any[]): { fromAccounts: AccountSummary[], toAccounts: AccountSummary[] } => {
+  const fromAccountsMap = new Map<string, AccountSummary>();
+  const toAccountsMap = new Map<string, AccountSummary>();
+  
+  if (!entries) return { fromAccounts: [], toAccounts: [] };
+  
+  entries.forEach((entry: any) => {
+    if (entry.account) {
+      const accountSummary: AccountSummary = {
+        account_id: entry.account.account_id,
+        merchant_id: entry.account.merchant_id,
+        account_name: entry.account.account_name,
+        account_type: entry.account.account_type
+      };
+      
+      // Use Map to ensure unique accounts (by account_id)
+      if (entry.entry_type === 'CREDIT') {
+        fromAccountsMap.set(accountSummary.account_id, accountSummary);
+      } else if (entry.entry_type === 'DEBIT') {
+        toAccountsMap.set(accountSummary.account_id, accountSummary);
+      }
+    }
+  });
+  
+  return { 
+    fromAccounts: Array.from(fromAccountsMap.values()),
+    toAccounts: Array.from(toAccountsMap.values())
+  };
+};
+
+/**
+ * Helper function to group transactions by logical ID
+ */
+const groupTransactionsByLogicalId = (transactions: any[]): Map<string, any[]> => {
+  const grouped = new Map<string, any[]>();
+  
+  transactions.forEach(tx => {
+    const logicalId = tx.logical_transaction_id;
+    if (!grouped.has(logicalId)) {
+      grouped.set(logicalId, []);
+    }
+    grouped.get(logicalId)!.push(tx);
+  });
+  
+  return grouped;
+};
+
+/**
+ * Helper function to build grouped transaction response
+ */
+const buildGroupedResponse = (logicalId: string, versions: any[]): GroupedTransactionResponse => {
+  // Sort versions by version number descending to get current version first
+  versions.sort((a, b) => b.version - a.version);
+  
+  const currentVersion = versions[0];
+  const { fromAccounts, toAccounts } = extractAccountInfo(currentVersion.entries);
+  const versionResponses = versions.map(mapTransactionToResponse);
+  
+  return {
+    logical_transaction_id: logicalId,
+    current_version: currentVersion.version,
+    amount: currentVersion.amount.toString(),
+    currency: currentVersion.currency,
+    from_accounts: fromAccounts,
+    to_accounts: toAccounts,
+    status: currentVersion.status,
+    versions: versionResponses
+  };
+};
+
 const listTransactionsHandler: RequestHandler<TransactionRouteParams, any, any, TransactionQuery> = async (req, res) => {
   const { merchant_id } = req.params; 
   const queryParams = req.query;
 
   try {
+    // Verify merchant exists
     const merchant = await prisma.merchantAccount.findUnique({ where: { merchant_id } });
     if (!merchant) {
       res.status(404).json({ error: 'Merchant not found.' });
-      return; 
+      return;
     }
 
+    // Fetch transactions from core logic
     const transactionDataList = await listTransactions(merchant_id, queryParams);
     
-    // Group transactions by logical_transaction_id
-    const groupedTransactions = new Map<string, any[]>();
+    // Group by logical_transaction_id
+    const groupedTransactions = groupTransactionsByLogicalId(transactionDataList);
     
-    transactionDataList.forEach(tx => {
-      const logicalId = tx.logical_transaction_id;
-      if (!groupedTransactions.has(logicalId)) {
-        groupedTransactions.set(logicalId, []);
-      }
-      groupedTransactions.get(logicalId)!.push(tx);
-    });
-    
-    // Build grouped response
+    // Build grouped responses
     const groupedResponses: GroupedTransactionResponse[] = [];
     
     for (const [logicalId, versions] of groupedTransactions) {
-      // Sort versions by version number descending to get current version first
-      versions.sort((a, b) => b.version - a.version);
-      
-      const currentVersion = versions[0];
-      
-      // Extract account information from current version's entries
-      const fromAccounts: AccountInfo[] = [];
-      const toAccounts: AccountInfo[] = [];
-      
-      if (currentVersion.entries) {
-        currentVersion.entries.forEach((entry: any) => {
-          const accountInfo: AccountInfo = {
-            account_id: entry.account_id,
-            account_name: entry.account?.account_name || 'Unknown Account',
-            entry_type: entry.entry_type
-          };
-          
-          if (entry.entry_type === 'CREDIT') {
-            fromAccounts.push(accountInfo);
-          } else if (entry.entry_type === 'DEBIT') {
-            toAccounts.push(accountInfo);
-          }
-        });
-      }
-      
-      // Map all versions to TransactionResponse format
-      const versionResponses: TransactionResponse[] = versions.map(txData => ({
-        transaction_id: txData.transaction_id,
-        logical_transaction_id: txData.logical_transaction_id,
-        version: txData.version,
-        amount: txData.amount.toString(),
-        currency: txData.currency,
-        merchant_id: txData.merchant_id,
-        status: txData.status,
-        created_at: txData.created_at,
-        updated_at: txData.updated_at,
-        discarded_at: txData.discarded_at,
-        metadata: txData.metadata,
-        entries: txData.entries ? txData.entries.map((entry: any) => ({
-          entry_id: entry.entry_id,
-          account_id: entry.account_id,
-          transaction_id: txData.transaction_id,
-          entry_type: entry.entry_type,
-          amount: entry.amount.toString(),
-          currency: entry.currency,
-          status: entry.status,
-          effective_date: entry.effective_date,
-          metadata: entry.metadata || null,
-          discarded_at: entry.discarded_at || null,
-          created_at: entry.created_at,
-          updated_at: entry.updated_at
-        } as EntryResponse)) : []
-      }));
-      
-      groupedResponses.push({
-        logical_transaction_id: logicalId,
-        current_version: currentVersion.version,
-        amount: currentVersion.amount.toString(),
-        currency: currentVersion.currency,
-        from_accounts: fromAccounts,
-        to_accounts: toAccounts,
-        status: currentVersion.status,
-        versions: versionResponses
-      });
+      groupedResponses.push(buildGroupedResponse(logicalId, versions));
     }
     
     // Sort grouped responses by newest first (based on current version's created_at)

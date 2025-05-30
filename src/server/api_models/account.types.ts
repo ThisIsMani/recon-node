@@ -64,6 +64,22 @@ import { AccountType } from '@prisma/client'; // Assuming AccountType enum is us
  *       enum:
  *         - DEBIT_NORMAL
  *         - CREDIT_NORMAL
+ *     AccountSummary:
+ *       type: object
+ *       description: Simplified account information for use in related entities
+ *       properties:
+ *         account_id:
+ *           type: string
+ *           format: uuid
+ *           description: The unique identifier for the account.
+ *         merchant_id:
+ *           type: string
+ *           description: The ID of the merchant this account belongs to.
+ *         account_name:
+ *           type: string
+ *           description: The name of the account.
+ *         account_type:
+ *           $ref: '#/components/schemas/AccountTypeEnum'
  */
 export interface CreateAccountRequest {
   merchant_id: string;
@@ -82,4 +98,12 @@ export interface AccountResponse {
   currency: string;
   created_at: Date;
   updated_at: Date;
+}
+
+// Simplified account type for use in other entities (entries, transactions)
+export interface AccountSummary {
+  account_id: string;
+  merchant_id: string;
+  account_name: string;
+  account_type: AccountType;
 }

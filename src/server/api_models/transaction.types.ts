@@ -55,19 +55,6 @@ import { EntryResponse } from './entry.types';
  *           description: Array of entries associated with this transaction.
  *           items:
  *             $ref: '#/components/schemas/EntryResponse'
- *     AccountInfo:
- *       type: object
- *       properties:
- *         account_id:
- *           type: string
- *           description: The ID of the account.
- *         account_name:
- *           type: string
- *           description: The name of the account.
- *         entry_type:
- *           type: string
- *           enum: [DEBIT, CREDIT]
- *           description: The type of entry for this account in the transaction.
  *     GroupedTransactionResponse:
  *       type: object
  *       properties:
@@ -89,12 +76,12 @@ import { EntryResponse } from './entry.types';
  *           type: array
  *           description: Accounts that are credited (money flows FROM).
  *           items:
- *             $ref: '#/components/schemas/AccountInfo'
+ *             $ref: '#/components/schemas/AccountSummary'
  *         to_accounts:
  *           type: array
  *           description: Accounts that are debited (money flows TO).
  *           items:
- *             $ref: '#/components/schemas/AccountInfo'
+ *             $ref: '#/components/schemas/AccountSummary'
  *         status:
  *           $ref: '#/components/schemas/TransactionStatusEnum'
  *           description: The status of the current version.
@@ -120,11 +107,7 @@ import { EntryResponse } from './entry.types';
 // If direct API creation/update of transactions is needed later,
 // CreateTransactionRequest and UpdateTransactionRequest can be defined here.
 
-export interface AccountInfo {
-  account_id: string;
-  account_name: string;
-  entry_type: 'DEBIT' | 'CREDIT';
-}
+import { AccountSummary } from './account.types';
 
 export interface TransactionResponse {
   transaction_id: string;
@@ -146,8 +129,8 @@ export interface GroupedTransactionResponse {
   current_version: number;
   amount: number | string;
   currency: string;
-  from_accounts: AccountInfo[];
-  to_accounts: AccountInfo[];
+  from_accounts: AccountSummary[];
+  to_accounts: AccountSummary[];
   status: TransactionStatus;
   versions: TransactionResponse[];
 }

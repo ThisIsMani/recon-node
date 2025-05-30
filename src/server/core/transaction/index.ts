@@ -50,7 +50,7 @@ export type TransactionWithEntries = Transaction & { // Use Domain Transaction
 /**
  * Lists transactions for a specific merchant, with optional filtering.
  */
-const listTransactions = async (merchantId: string, queryParams: ListTransactionsQueryParams = {}): Promise<Array<Transaction & { entries: Array<PrismaEntry & { account: { account_id: string; account_name: string } }> }>> => { // Return array of Domain Transaction
+const listTransactions = async (merchantId: string, queryParams: ListTransactionsQueryParams = {}): Promise<Array<Transaction & { entries: Array<PrismaEntry & { account: { account_id: string; account_name: string; merchant_id: string; account_type: string } }> }>> => { // Return array of Domain Transaction
   const { status, logical_transaction_id, version } = queryParams;
   const whereClause: Prisma.TransactionWhereInput = { merchant_id: merchantId };
 
@@ -82,7 +82,9 @@ const listTransactions = async (merchantId: string, queryParams: ListTransaction
             account: {
               select: {
                 account_id: true,
-                account_name: true
+                account_name: true,
+                merchant_id: true,
+                account_type: true
               }
             }
           }
@@ -92,7 +94,7 @@ const listTransactions = async (merchantId: string, queryParams: ListTransaction
         created_at: 'desc'
       }
     });
-    return transactions as Array<Transaction & { entries: Array<PrismaEntry & { account: { account_id: string; account_name: string } }> }>; // Cast to Domain Transaction
+    return transactions as Array<Transaction & { entries: Array<PrismaEntry & { account: { account_id: string; account_name: string; merchant_id: string; account_type: string } }> }>; // Cast to Domain Transaction
   } catch (error) {
     if (error instanceof AppError) {
       throw error;
