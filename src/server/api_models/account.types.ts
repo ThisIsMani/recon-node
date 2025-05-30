@@ -26,6 +26,11 @@ import { AccountType } from '@prisma/client'; // Assuming AccountType enum is us
  *           type: string
  *           description: The currency of the account (e.g., USD, EUR).
  *           example: "USD"
+ *         initial_balance:
+ *           type: number
+ *           format: decimal
+ *           description: The initial balance for the account (optional, defaults to 0).
+ *           example: 1000.00
  *
  *     AccountResponse:
  *       type: object
@@ -45,6 +50,9 @@ import { AccountType } from '@prisma/client'; // Assuming AccountType enum is us
  *         currency:
  *           type: string
  *           description: The currency of the account.
+ *         initial_balance:
+ *           type: string
+ *           description: The initial balance of the account.
  *         created_at:
  *           type: string
  *           format: date-time
@@ -86,6 +94,7 @@ export interface CreateAccountRequest {
   account_name: string;
   account_type: AccountType; // Enum from Prisma
   currency: string;
+  initial_balance?: number | string;
 }
 
 export interface UpdateAccountRequest extends Partial<CreateAccountRequest> {}
@@ -96,6 +105,7 @@ export interface AccountResponse {
   account_name: string;
   account_type: AccountType;
   currency: string;
+  initial_balance: string;
   created_at: Date;
   updated_at: Date;
 }

@@ -59,7 +59,8 @@ async function getEntrySums(accountId: string): Promise<EntrySums> {
 
 export async function calculateAccountBalances(
   accountId: string,
-  accountType: AccountType
+  accountType: AccountType,
+  initialBalance: Decimal = new Decimal(0)
 ): Promise<AccountBalances> {
   const { postedDebits, postedCredits, pendingDebits, pendingCredits } = await getEntrySums(accountId);
 
@@ -69,14 +70,16 @@ export async function calculateAccountBalances(
 
   if (accountType === AccountType.DEBIT_NORMAL) {
     // For debit normal accounts (Assets, Expenses)
-    postedBalance = postedDebits.sub(postedCredits);
-    pendingBalance = pendingDebits.sub(pendingCredits);
-    availableBalance = postedDebits.sub(pendingCredits);
+    // Initial balance increases the debit side
+    postedBalance = initialBalance.add(postedDebits).sub(postedCredits);
+    pendingBalance = initialBalance.add(pendingDebits).sub(pendingCredits);
+    availableBalance = initialBalance.add(postedDebits).sub(pendingCredits);
   } else {
     // For credit normal accounts (Liabilities, Revenue, Equity)
-    postedBalance = postedCredits.sub(postedDebits);
-    pendingBalance = pendingCredits.sub(pendingDebits);
-    availableBalance = postedCredits.sub(pendingDebits);
+    // Initial balance increases the credit side
+    postedBalance = initialBalance.add(postedCredits).sub(postedDebits);
+    pendingBalance = initialBalance.add(pendingCredits).sub(pendingDebits);
+    availableBalance = initialBalance.add(postedCredits).sub(pendingDebits);
   }
 
   return {
@@ -87,11 +90,11 @@ export async function calculateAccountBalances(
 }
 
 export async function calculateMultipleAccountBalances(
-  accounts: Array<{ account_id: string; account_type: AccountType }>
+  accounts: Array<{ account_id: string; account_type: AccountType; initial_balance: Decimal }>
 ): Promise<Map<string, AccountBalances>> {
   // Calculate balances for all accounts in parallel
   const balancePromises = accounts.map(async (account) => {
-    const balances = await calculateAccountBalances(account.account_id, account.account_type);
+    const balances = await calculateAccountBalances(account.account_id, account.account_type, account.initial_balance);
     return { accountId: account.account_id, balances };
   });
 

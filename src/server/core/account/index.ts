@@ -1,6 +1,7 @@
 import prisma from '../../../services/prisma';
 import logger from '../../../services/logger';
 import { Account as PrismaAccountFromPrisma, AccountType as PrismaAccountType, Prisma } from '@prisma/client'; // Renamed to avoid clash
+import { Decimal } from '@prisma/client/runtime/library';
 import { Account } from '../../domain_models/account.types'; // Import Domain Model
 import { AppError, NotFoundError, ValidationError, InternalServerError } from '../../../errors/AppError';
 import { findUniqueOrThrow, ensureEntityBelongsToMerchant } from '../../../services/databaseHelpers';
@@ -12,6 +13,7 @@ export interface CreateAccountInput { // Export if used by routes directly, or k
     account_name: string;
     account_type: PrismaAccountType;
     currency: string;
+    initial_balance?: number | string;
 }
 
 // Define a type for Prisma errors that include a 'code' and 'meta'
@@ -42,12 +44,23 @@ async function createAccount(accountInput: CreateAccountInput): Promise<Account>
       accountInput.merchant_id
     );
 
+    // Convert initial_balance to Decimal if provided
+    let initialBalance = new Decimal(0);
+    if (accountInput.initial_balance !== undefined) {
+      try {
+        initialBalance = new Decimal(accountInput.initial_balance);
+      } catch (e) {
+        throw new ValidationError('Invalid initial_balance. Must be a valid number.');
+      }
+    }
+
     const newPrismaAccount = await prisma.account.create({
       data: {
         merchant_id: accountInput.merchant_id,
         account_name: accountInput.account_name,
         account_type: accountInput.account_type,
         currency: accountInput.currency,
+        initial_balance: initialBalance,
       },
       // Select all fields to match the full Account domain model (which includes timestamps)
       // Alternatively, if Account domain model was Omit<PrismaAccount, 'some_other_field'>, adjust select accordingly.
@@ -87,7 +100,8 @@ async function listAccountsByMerchant(merchantId: string): Promise<Array<Account
     const balanceMap = await calculateMultipleAccountBalances(
       prismaAccounts.map(acc => ({ 
         account_id: acc.account_id, 
-        account_type: acc.account_type 
+        account_type: acc.account_type,
+        initial_balance: acc.initial_balance 
       }))
     );
     

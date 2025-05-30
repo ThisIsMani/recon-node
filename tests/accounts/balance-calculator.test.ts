@@ -181,13 +181,59 @@ describe('Balance Calculator', () => {
         },
       });
     });
+
+    it('should include initial balance for debit normal accounts', async () => {
+      const accountId = 'acc104';
+      const initialBalance = new Decimal(1000);
+      
+      mockGroupBy
+        .mockResolvedValueOnce([
+          { entry_type: EntryType.DEBIT, _sum: { amount: new Decimal(500) } },
+          { entry_type: EntryType.CREDIT, _sum: { amount: new Decimal(200) } },
+        ] as any)
+        .mockResolvedValueOnce([
+          { entry_type: EntryType.DEBIT, _sum: { amount: new Decimal(700) } },
+          { entry_type: EntryType.CREDIT, _sum: { amount: new Decimal(300) } },
+        ] as any);
+
+      const result = await calculateAccountBalances(accountId, AccountType.DEBIT_NORMAL, initialBalance);
+
+      expect(result).toEqual({
+        posted_balance: '1300.00', // 1000 + 500 - 200
+        pending_balance: '1400.00', // 1000 + 700 - 300
+        available_balance: '1200.00', // 1000 + 500 - 300
+      });
+    });
+
+    it('should include initial balance for credit normal accounts', async () => {
+      const accountId = 'acc105';
+      const initialBalance = new Decimal(2000);
+      
+      mockGroupBy
+        .mockResolvedValueOnce([
+          { entry_type: EntryType.DEBIT, _sum: { amount: new Decimal(100) } },
+          { entry_type: EntryType.CREDIT, _sum: { amount: new Decimal(600) } },
+        ] as any)
+        .mockResolvedValueOnce([
+          { entry_type: EntryType.DEBIT, _sum: { amount: new Decimal(200) } },
+          { entry_type: EntryType.CREDIT, _sum: { amount: new Decimal(800) } },
+        ] as any);
+
+      const result = await calculateAccountBalances(accountId, AccountType.CREDIT_NORMAL, initialBalance);
+
+      expect(result).toEqual({
+        posted_balance: '2500.00', // 2000 + 600 - 100
+        pending_balance: '2600.00', // 2000 + 800 - 200
+        available_balance: '2400.00', // 2000 + 600 - 200
+      });
+    });
   });
 
   describe('calculateMultipleAccountBalances', () => {
     it('should calculate balances for multiple accounts in parallel', async () => {
       const accounts = [
-        { account_id: 'acc1', account_type: AccountType.DEBIT_NORMAL },
-        { account_id: 'acc2', account_type: AccountType.CREDIT_NORMAL },
+        { account_id: 'acc1', account_type: AccountType.DEBIT_NORMAL, initial_balance: new Decimal(0) },
+        { account_id: 'acc2', account_type: AccountType.CREDIT_NORMAL, initial_balance: new Decimal(0) },
       ];
 
       // Mock for first account

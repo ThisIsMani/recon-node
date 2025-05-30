@@ -4,6 +4,7 @@ jest.mock('../../../src/services/prisma');
 import { listEntries, createEntryInternal, CreateEntryInternalData } from '../../../src/server/core/entry';
 import prisma from '../../../src/services/prisma'; // This will now be the mock
 import { EntryStatus, EntryType, AccountType, TransactionStatus, MerchantAccount, Account as PrismaAccount, Transaction as PrismaTransaction, Entry as PrismaEntryPrisma, Prisma } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { Entry } from '../../../src/server/domain_models/entry.types';
 import logger from '../../../src/services/logger';
 
@@ -36,6 +37,7 @@ describe('Entry Core Logic', () => {
         account_name: 'Entry Core Test Account', 
         account_type: AccountType.DEBIT_NORMAL, 
         currency: 'USD', 
+        initial_balance: new Decimal(0),
         created_at: new Date(), 
         updated_at: new Date() 
     };

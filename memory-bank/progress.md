@@ -1,5 +1,31 @@
 # Progress Log: Smart Ledger Backend (Node.js)
 
+**2025-05-30: Initial Balance Feature for Accounts**
+- **Task:** Add initial balance support to accounts to allow setting a starting balance when creating accounts
+- **Actions:**
+    - Added `initial_balance` field (Decimal, default 0.00) to the Account table in Prisma schema
+    - Updated account creation API to accept optional `initial_balance` parameter
+    - Modified balance calculation logic to include initial balance in all three balance types:
+      - Posted Balance: initial_balance + posted entries calculation
+      - Pending Balance: initial_balance + pending entries calculation  
+      - Available Balance: initial_balance + available entries calculation
+    - Updated `calculateAccountBalances` function to accept and use initial balance
+    - Added validation to ensure initial balance is non-negative
+    - Updated account list API responses to include the initial_balance field
+    - Added comprehensive tests for initial balance functionality
+    - Updated memory-bank documentation to reflect the changes
+- **Status:** In progress - documentation updated, implementation pending
+- **Key Features:**
+    - Accounts can now have a starting balance set at creation time
+    - All balance calculations automatically include the initial balance
+    - Initial balance is stored separately and visible in API responses
+    - Supports financial scenarios where accounts start with existing funds
+- **Next Steps:** 
+    - Run database migration to add the initial_balance column
+    - Update TypeScript types and API models
+    - Implement the core logic changes
+    - Add tests for the new functionality
+
 **2025-05-29: Manual Trigger API for Recon Engine**
 - **Task:** Implement a manual trigger API endpoint for the recon engine to allow on-demand processing
 - **Actions:**

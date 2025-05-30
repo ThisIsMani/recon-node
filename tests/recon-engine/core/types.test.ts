@@ -8,6 +8,7 @@ import {
   StagingEntryStatusUpdate
 } from '../../../src/server/api_models/staging_entry.types'; // Updated path
 import { StagingEntryStatus, AccountType, TransactionStatus, EntryStatus, Prisma } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 
 describe('Recon Engine Types', () => {
   describe('StagingEntryWithAccount', () => {
@@ -31,6 +32,7 @@ describe('Recon Engine Types', () => {
           account_name: 'Test Account',
           account_type: AccountType.DEBIT_NORMAL,
           currency: 'USD',
+          initial_balance: new Decimal(0),
           created_at: new Date(),
           updated_at: new Date()
         }

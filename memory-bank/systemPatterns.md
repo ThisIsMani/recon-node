@@ -96,3 +96,14 @@
     - For operations requiring multiple database writes that must succeed or fail together (e.g., creating a `Transaction` and its associated `Entry` records), Prisma's interactive transactions (`prisma.$transaction(async (tx) => { ... })`) are used.
     - This ensures data consistency by rolling back all operations within the transaction block if any single operation fails.
     - Example: `src/server/core/transaction/index.js` uses this pattern in `createTransactionInternal` to atomically create a transaction and its two balanced entries.
+
+- **Balance Calculation Pattern:**
+    - Account balances are calculated dynamically by combining:
+      1. The account's `initial_balance` (stored in the database)
+      2. Sum of entries from the Entry table based on status (POSTED, EXPECTED)
+    - Three balance types are calculated:
+      - **Posted Balance**: Initial balance + settled entries
+      - **Pending Balance**: Initial balance + all entries (settled + expected)
+      - **Available Balance**: Initial balance + posted debits - pending credits (for DEBIT_NORMAL)
+    - Balance formulas vary based on `account_type` (DEBIT_NORMAL vs CREDIT_NORMAL)
+    - This pattern ensures consistency and avoids complex balance update triggers

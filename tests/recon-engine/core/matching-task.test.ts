@@ -2,6 +2,7 @@ import { MatchingTask, MatchingTaskClass } from '../../../src/server/core/recon-
 import { StagingEntryWithAccount } from '../../../src/server/domain_models/staging_entry.types'; // Updated path
 import { TransactionWithEntries } from '../../../src/server/core/transaction'; // Updated path
 import { StagingEntryProcessingMode, StagingEntryStatus, EntryType, Prisma as PrismaTypes, ProcessTracker, ProcessTaskType, Prisma, AccountType } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { ValidationError, ProcessingError } from '../../../src/server/core/recon-engine/error';
 import prisma from '../../../src/services/prisma';
 import logger from '../../../src/services/logger';
@@ -64,6 +65,7 @@ describe('ExpectedEntryMatchingTask', () => {
         account_name: 'Test Account',
         account_type: AccountType.DEBIT_NORMAL,
         currency: 'USD',
+        initial_balance: new Decimal(0),
         created_at: new Date(),
         updated_at: new Date()
       }

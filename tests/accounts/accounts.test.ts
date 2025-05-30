@@ -97,6 +97,36 @@ describe('Account API Endpoints', () => {
         expect(response.statusCode).toBe(400); 
         expect(response.body.error).toBe('Invalid account_type. Must be one of: DEBIT_NORMAL, CREDIT_NORMAL'); 
       });
+
+    it('should create account with initial balance', async () => {
+      const response = await request(server)
+        .post(`/api/merchants/${testMerchant!.merchant_id}/accounts`)
+        .send({ 
+          account_name: 'Initial Balance Account', 
+          account_type: 'DEBIT_NORMAL', 
+          currency: 'USD',
+          initial_balance: 1500.50
+        });
+      
+      expect(response.statusCode).toBe(201);
+      expect(response.body).toHaveProperty('account_id');
+      expect(response.body.initial_balance).toBe('1500.50');
+      expect(response.body.account_name).toBe('Initial Balance Account');
+    });
+
+    it('should use default initial balance of 0 when not provided', async () => {
+      const response = await request(server)
+        .post(`/api/merchants/${testMerchant!.merchant_id}/accounts`)
+        .send({ 
+          account_name: 'Zero Balance Account', 
+          account_type: 'CREDIT_NORMAL', 
+          currency: 'EUR'
+        });
+      
+      expect(response.statusCode).toBe(201);
+      expect(response.body).toHaveProperty('account_id');
+      expect(response.body.initial_balance).toBe('0.00');
+    });
   });
 
   describe('GET /api/merchants/:merchant_id/accounts', () => {
@@ -146,8 +176,10 @@ describe('Account API Endpoints', () => {
         expect(acc).toHaveProperty('account_name');
         expect(acc).toHaveProperty('account_type');
         expect(acc).toHaveProperty('currency');
+        expect(acc).toHaveProperty('initial_balance');
         expect(acc).toHaveProperty('created_at');
         expect(acc).toHaveProperty('updated_at');
+        expect(acc.initial_balance).toBe('0.00'); // Default initial balance
         expect(new Date(acc.created_at).toISOString()).toBe(acc.created_at);
         expect(new Date(acc.updated_at).toISOString()).toBe(acc.updated_at);
 

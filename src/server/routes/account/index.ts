@@ -48,6 +48,10 @@ const router: Router = express.Router({ mergeParams: true }); // mergeParams all
  *                 type: string
  *                 description: 3-letter currency code
  *                 example: USD
+ *               initial_balance:
+ *                 type: number
+ *                 description: Initial balance for the account (optional, defaults to 0)
+ *                 example: 1000.00
  *     responses:
  *       201:
  *         description: Account created successfully
@@ -164,10 +168,10 @@ const router: Router = express.Router({ mergeParams: true }); // mergeParams all
 const createAccountHandler: RequestHandler<{ merchant_id: string }, any, CreateAccountRequest> = async (req, res, next) => {
   const { merchant_id } = req.params; // merchant_id from path is already in CreateAccountRequest
   try {
-    const { account_name, account_type, currency } = req.body; // Fields from CreateAccountRequest
+    const { account_name, account_type, currency, initial_balance } = req.body; // Fields from CreateAccountRequest
     
     // Add merchant_id from path to the data for core function
-    const accountDataForCore = { merchant_id, account_name, account_type, currency };
+    const accountDataForCore = { merchant_id, account_name, account_type, currency, initial_balance };
 
     if (!account_name || !account_type || !currency) {
       // Consider using AppError for consistency
@@ -187,6 +191,7 @@ const createAccountHandler: RequestHandler<{ merchant_id: string }, any, CreateA
         account_name: accountData.account_name,
         account_type: accountData.account_type,
         currency: accountData.currency,
+        initial_balance: accountData.initial_balance.toFixed(2),
         created_at: accountData.created_at,
         updated_at: accountData.updated_at,
     };
@@ -221,6 +226,7 @@ const listAccountsHandler: RequestHandler<{ merchant_id: string }> = async (req,
         account_name: acc.account_name,
         account_type: acc.account_type,
         currency: acc.currency,
+        initial_balance: acc.initial_balance.toFixed(2),
         created_at: acc.created_at,
         updated_at: acc.updated_at,
         posted_balance: acc.posted_balance,
@@ -256,6 +262,7 @@ const deleteAccountHandler: RequestHandler<{ merchant_id: string, account_id: st
         account_name: deletedAccountData.account_name,
         account_type: deletedAccountData.account_type,
         currency: deletedAccountData.currency,
+        initial_balance: deletedAccountData.initial_balance.toFixed(2),
         created_at: deletedAccountData.created_at,
         updated_at: deletedAccountData.updated_at,
     };
@@ -295,6 +302,7 @@ const updateAccountNameHandler: RequestHandler<{ merchant_id: string, account_id
         account_name: updatedAccountData.account_name,
         account_type: updatedAccountData.account_type,
         currency: updatedAccountData.currency,
+        initial_balance: updatedAccountData.initial_balance.toFixed(2),
         created_at: updatedAccountData.created_at,
         updated_at: updatedAccountData.updated_at,
     };

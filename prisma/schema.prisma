@@ -169,6 +169,7 @@ model Account {
   account_name  String      @db.VarChar(255)
   account_type  AccountType
   currency      String      @db.VarChar(3) // E.g., "USD", "EUR"
+  initial_balance Decimal   @default(0) @db.Decimal(20, 4)
   created_at    DateTime    @default(now())
   updated_at    DateTime    @updatedAt
 
